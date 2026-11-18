@@ -9,15 +9,6 @@ import {
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
-
-const FloatingOrbs = dynamic(
-  () =>
-    import("@/components/three/floating-orbs").then((m) => ({
-      default: m.FloatingOrbs,
-    })),
-  { ssr: false },
-);
 
 const services = [
   {
@@ -71,7 +62,6 @@ const cardVariants = {
 export function ServicesSection() {
   return (
     <section className="py-24 relative overflow-hidden">
-      <FloatingOrbs />
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <motion.div
@@ -123,6 +113,8 @@ export function ServicesSection() {
                 href={service.href}
                 className="group block h-full bg-surface rounded-2xl border border-white/5 p-6 hover:border-orange/20 transition-all duration-500 relative overflow-hidden hover:-translate-y-2 hover:shadow-xl hover:shadow-orange/5"
               >
+                {/* MaxTorque-style top glow line */}
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-orange opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <div
                   className={`absolute inset-0 bg-gradient-to-br ${service.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
                 />

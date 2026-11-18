@@ -1,27 +1,48 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { ArrowRight, Play } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowRight, Play, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { AnimatedCounter } from "@/components/shared/animated-counter";
 
-const CarShowcase3D = dynamic(
-  () =>
-    import("@/components/three/car-showcase").then((m) => ({
-      default: m.CarShowcase3D,
-    })),
-  { ssr: false },
-);
+const heroSlides = [
+  {
+    image:
+      "https://images.unsplash.com/photo-1555215695-3004980ad54e?w=1400&h=900&fit=crop&q=90",
+    make: "BMW",
+    model: "M4 Competition",
+    price: "£54,990",
+    tag: "Performance",
+  },
+  {
+    image:
+      "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=1400&h=900&fit=crop&q=90",
+    make: "Mercedes-Benz",
+    model: "S-Class",
+    price: "£76,990",
+    tag: "Luxury",
+  },
+  {
+    image:
+      "https://images.unsplash.com/photo-1606016159991-dfe4f2746ad5?w=1400&h=900&fit=crop&q=90",
+    make: "Range Rover",
+    model: "Sport",
+    price: "£54,990",
+    tag: "Prestige",
+  },
+];
 
-const ParticleField = dynamic(
-  () =>
-    import("@/components/three/particle-field").then((m) => ({
-      default: m.ParticleField,
-    })),
-  { ssr: false },
-);
+const particles = Array.from({ length: 12 }, (_, i) => ({
+  id: i,
+  x: 12 + ((i * 37 + 13) % 76),
+  y: 15 + ((i * 29 + 7) % 70),
+  dy: -(30 + ((i * 11) % 40)),
+  dx: ((i * 17) % 20) - 10,
+  dur: 3 + (i % 3),
+  delay: (i * 0.35) % 4,
+}));
 
 const stagger = {
   hidden: { opacity: 0 },
@@ -36,18 +57,35 @@ const fadeUp = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] as const },
   },
 };
 
 export function HeroSection() {
+  const [current, setCurrent] = useState(0);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+
+  const next = useCallback(() => {
+    setCurrent((prev) => (prev + 1) % heroSlides.length);
+  }, []);
+
+  const prev = useCallback(() => {
+    setCurrent((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+  }, []);
+
+  useEffect(() => {
+    if (!isAutoPlaying) return;
+    const timer = setInterval(next, 5000);
+    return () => clearInterval(timer);
+  }, [isAutoPlaying, next]);
+
+  const slide = heroSlides[current];
+
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden">
       {/* Background layers */}
       <div className="absolute inset-0 bg-background">
         <div className="absolute inset-0 hero-gradient" />
-        <div className="absolute top-1/4 right-0 w-[800px] h-[800px] rounded-full bg-orange/5 blur-[120px]" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] rounded-full bg-orange/3 blur-[100px]" />
         <div
           className="absolute inset-0 opacity-[0.03]"
           style={{
@@ -56,9 +94,6 @@ export function HeroSection() {
           }}
         />
       </div>
-
-      {/* 3D Particle field background */}
-      <ParticleField />
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-32 pb-20 w-full">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
@@ -87,7 +122,11 @@ export function HeroSection() {
                 className="text-white inline-block"
                 initial={{ opacity: 0, x: -40 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
+                transition={{
+                  duration: 0.8,
+                  ease: [0.22, 1, 0.36, 1] as const,
+                  delay: 0.3,
+                }}
               >
                 Drive Your
               </motion.span>
@@ -96,7 +135,11 @@ export function HeroSection() {
                 className="text-white inline-block"
                 initial={{ opacity: 0, x: -40 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.45 }}
+                transition={{
+                  duration: 0.8,
+                  ease: [0.22, 1, 0.36, 1] as const,
+                  delay: 0.45,
+                }}
               >
                 Dream
               </motion.span>
@@ -105,7 +148,11 @@ export function HeroSection() {
                 className="text-gradient inline-block"
                 initial={{ opacity: 0, x: -40, scale: 0.9 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
-                transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.6 }}
+                transition={{
+                  duration: 0.8,
+                  ease: [0.22, 1, 0.36, 1] as const,
+                  delay: 0.6,
+                }}
               >
                 Car Today
               </motion.span>
@@ -167,37 +214,231 @@ export function HeroSection() {
             </motion.div>
           </motion.div>
 
-          {/* Right - 3D Car Showcase */}
+          {/* Right — Cinematic Car Showcase */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 1.2, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            transition={{
+              duration: 1.2,
+              delay: 0.5,
+              ease: [0.22, 1, 0.36, 1] as const,
+            }}
             className="relative hidden lg:block"
           >
-            <div className="relative aspect-[4/3] rounded-3xl overflow-hidden">
-              <CarShowcase3D />
+            <div
+              className="relative aspect-[4/3] rounded-3xl overflow-hidden group"
+              onMouseEnter={() => setIsAutoPlaying(false)}
+              onMouseLeave={() => setIsAutoPlaying(true)}
+            >
+              {/* Car image with cinematic reveal */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={current}
+                  className="absolute inset-0"
+                  initial={{ opacity: 0, scale: 1.1 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{
+                    duration: 0.8,
+                    ease: [0.22, 1, 0.36, 1] as const,
+                  }}
+                >
+                  <img
+                    src={slide.image}
+                    alt={`${slide.make} ${slide.model}`}
+                    className="w-full h-full object-cover"
+                  />
+                </motion.div>
+              </AnimatePresence>
 
-              {/* Glass overlay info */}
+              {/* Cinematic overlay — dark vignette */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-transparent to-transparent pointer-events-none" />
+
+              {/* Animated headlight glow — left beam */}
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 2, duration: 0.6 }}
-                className="absolute bottom-6 left-6 glass rounded-2xl p-4 border border-white/10"
-              >
-                <p className="text-xs text-zinc-400">Starting from</p>
-                <p className="text-2xl font-bold text-white mt-0.5">
-                  &pound;14,990
-                </p>
-                <p className="text-xs text-orange mt-1">
-                  Finance from &pound;199/mo
-                </p>
-              </motion.div>
+                className="absolute top-[30%] left-[10%] w-[300px] h-[200px] pointer-events-none"
+                animate={{
+                  opacity: [0, 0.6, 0.8, 0.6, 0],
+                  scale: [0.8, 1.2, 1.3, 1.2, 0.8],
+                }}
+                transition={{
+                  duration: 4,
+                  repeat: Infinity,
+                  repeatDelay: 1,
+                  ease: "easeInOut",
+                }}
+                style={{
+                  background:
+                    "radial-gradient(ellipse at center, rgba(232,89,12,0.25) 0%, rgba(232,89,12,0.08) 40%, transparent 70%)",
+                }}
+              />
 
+              {/* Animated headlight glow — right beam */}
+              <motion.div
+                className="absolute top-[25%] right-[15%] w-[250px] h-[180px] pointer-events-none"
+                animate={{
+                  opacity: [0, 0.4, 0.7, 0.4, 0],
+                  scale: [0.9, 1.1, 1.2, 1.1, 0.9],
+                }}
+                transition={{
+                  duration: 4,
+                  delay: 0.5,
+                  repeat: Infinity,
+                  repeatDelay: 1,
+                  ease: "easeInOut",
+                }}
+                style={{
+                  background:
+                    "radial-gradient(ellipse at center, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 40%, transparent 70%)",
+                }}
+              />
+
+              {/* Sweeping light across car body */}
+              <motion.div
+                className="absolute inset-0 pointer-events-none"
+                animate={{
+                  background: [
+                    "linear-gradient(105deg, transparent 0%, transparent 40%, rgba(255,255,255,0.03) 45%, transparent 50%, transparent 100%)",
+                    "linear-gradient(105deg, transparent 0%, transparent 50%, rgba(255,255,255,0.08) 55%, transparent 60%, transparent 100%)",
+                    "linear-gradient(105deg, transparent 0%, transparent 60%, rgba(255,255,255,0.03) 65%, transparent 70%, transparent 100%)",
+                    "linear-gradient(105deg, transparent 0%, transparent 40%, rgba(255,255,255,0.03) 45%, transparent 50%, transparent 100%)",
+                  ],
+                }}
+                transition={{
+                  duration: 6,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+              />
+
+              {/* Floor reflection glow */}
+              <motion.div
+                className="absolute bottom-0 left-0 right-0 h-[40%] pointer-events-none"
+                animate={{
+                  opacity: [0.4, 0.7, 0.4],
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+                style={{
+                  background:
+                    "linear-gradient(to top, rgba(232,89,12,0.15) 0%, rgba(232,89,12,0.05) 30%, transparent 100%)",
+                }}
+              />
+
+              {/* Ambient particles (CSS) */}
+              <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                {particles.map((p) => (
+                  <motion.div
+                    key={p.id}
+                    className="absolute w-1 h-1 rounded-full bg-orange/40"
+                    style={{ left: `${p.x}%`, top: `${p.y}%` }}
+                    animate={{
+                      y: [0, p.dy, 0],
+                      x: [0, p.dx, 0],
+                      opacity: [0, 0.6, 0],
+                      scale: [0, 1, 0],
+                    }}
+                    transition={{
+                      duration: p.dur,
+                      repeat: Infinity,
+                      delay: p.delay,
+                      ease: "easeInOut",
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Car info overlay — bottom */}
+              <div className="absolute bottom-0 left-0 right-0 p-6 z-10">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={current}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{
+                      duration: 0.5,
+                      ease: [0.22, 1, 0.36, 1] as const,
+                    }}
+                    className="flex items-end justify-between"
+                  >
+                    <div>
+                      <span className="inline-block px-3 py-1 rounded-full bg-orange/20 border border-orange/30 text-orange text-xs font-medium mb-3">
+                        {slide.tag}
+                      </span>
+                      <h3 className="text-2xl font-bold text-white">
+                        {slide.make}{" "}
+                        <span className="text-orange">{slide.model}</span>
+                      </h3>
+                      <p className="text-zinc-400 text-sm mt-1">
+                        From{" "}
+                        <span className="text-white font-semibold">
+                          {slide.price}
+                        </span>
+                      </p>
+                    </div>
+
+                    <Link
+                      href="/vehicles"
+                      className="shrink-0 w-11 h-11 rounded-full bg-orange flex items-center justify-center hover:bg-orange-dark transition-colors shadow-lg shadow-orange/30"
+                    >
+                      <ArrowRight className="w-5 h-5 text-white" />
+                    </Link>
+                  </motion.div>
+                </AnimatePresence>
+
+                {/* Slide progress bar */}
+                <div className="flex gap-2 mt-5">
+                  {heroSlides.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setCurrent(i)}
+                      className="relative h-1 flex-1 rounded-full bg-white/10 overflow-hidden"
+                    >
+                      {i === current && (
+                        <motion.div
+                          className="absolute inset-y-0 left-0 bg-orange rounded-full"
+                          initial={{ width: "0%" }}
+                          animate={{ width: "100%" }}
+                          transition={{
+                            duration: isAutoPlaying ? 5 : 100,
+                            ease: "linear",
+                          }}
+                          key={`progress-${current}-${isAutoPlaying}`}
+                        />
+                      )}
+                      {i < current && (
+                        <div className="absolute inset-0 bg-orange/50 rounded-full" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Navigation arrows */}
+              <button
+                onClick={prev}
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full glass border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:border-white/30 transition-all opacity-0 group-hover:opacity-100 z-10"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={next}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full glass border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:border-white/30 transition-all opacity-0 group-hover:opacity-100 z-10"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+
+              {/* Glass status badge */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 2.2, duration: 0.5 }}
-                className="absolute top-6 right-6 glass rounded-full px-4 py-2 border border-white/10 flex items-center gap-2"
+                className="absolute top-4 right-4 glass rounded-full px-4 py-2 border border-white/10 flex items-center gap-2 z-10"
               >
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
@@ -209,7 +450,7 @@ export function HeroSection() {
               </motion.div>
             </div>
 
-            {/* Decorative */}
+            {/* Decorative corner accents */}
             <motion.div
               initial={{ opacity: 0, rotate: -10 }}
               animate={{ opacity: 1, rotate: 0 }}
@@ -221,6 +462,23 @@ export function HeroSection() {
               animate={{ opacity: 0.5, scale: 1 }}
               transition={{ delay: 1.8, duration: 0.8 }}
               className="absolute -bottom-4 -left-4 w-32 h-32 border border-white/5 rounded-full"
+            />
+
+            {/* Ambient glow behind the card */}
+            <motion.div
+              className="absolute -inset-8 -z-10 rounded-[2rem]"
+              animate={{
+                opacity: [0.3, 0.5, 0.3],
+              }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+              style={{
+                background:
+                  "radial-gradient(ellipse at 60% 50%, rgba(232,89,12,0.12) 0%, transparent 60%)",
+              }}
             />
           </motion.div>
         </div>

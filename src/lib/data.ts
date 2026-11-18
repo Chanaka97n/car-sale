@@ -12,7 +12,22 @@ export interface Vehicle {
   horsepower: number;
   bodyType: string;
   image: string;
+  images?: string[];
   featured?: boolean;
+  engineSize?: string;
+  doors?: number;
+  colour?: string;
+  drivetrain?: string;
+  seats?: number;
+  topSpeed?: number;
+  acceleration?: string;
+  co2?: number;
+  mpg?: number;
+  registration?: string;
+  previousOwners?: number;
+  serviceHistory?: string;
+  features?: string[];
+  description?: string;
 }
 
 export const vehicles: Vehicle[] = [
@@ -30,7 +45,45 @@ export const vehicles: Vehicle[] = [
     horsepower: 503,
     bodyType: "Saloon",
     image: "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=600&h=400&fit=crop",
+    images: [
+      "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=1200&h=800&fit=crop",
+      "https://images.unsplash.com/photo-1563720223185-11003d516935?w=1200&h=800&fit=crop",
+      "https://images.unsplash.com/photo-1617469955236-f8dd1a135e72?w=1200&h=800&fit=crop",
+      "https://images.unsplash.com/photo-1603584173870-7f23fdae1b7a?w=1200&h=800&fit=crop",
+      "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=1200&h=800&fit=crop",
+    ],
     featured: true,
+    engineSize: "4.0L V8 Biturbo",
+    doors: 4,
+    colour: "Obsidian Black Metallic",
+    drivetrain: "4MATIC AWD",
+    seats: 5,
+    topSpeed: 155,
+    acceleration: "4.4s",
+    co2: 256,
+    mpg: 25,
+    registration: "2022 (72)",
+    previousOwners: 1,
+    serviceHistory: "Full Mercedes-Benz Service History",
+    description: "Stunning Mercedes-Benz S 580 L AMG Line Premium Plus finished in Obsidian Black Metallic with black Nappa leather interior. This flagship saloon combines extraordinary luxury with effortless performance from its 4.0L V8 Biturbo engine. Loaded with every conceivable option including MBUX augmented reality navigation, Burmester 4D surround sound, rear executive seating package and driving assistance package plus.",
+    features: [
+      "MBUX Infotainment System",
+      "Burmester 4D Surround Sound",
+      "360° Camera System",
+      "Heated & Ventilated Front Seats",
+      "Rear Executive Seating Package",
+      "Panoramic Sunroof",
+      "Head-Up Display",
+      "Adaptive Air Suspension",
+      "Wireless Charging",
+      "Keyless Entry & Start",
+      "LED Intelligent Light System",
+      "Parking Assist Plus",
+      "Active Lane Keeping Assist",
+      "Blind Spot Monitoring",
+      "Apple CarPlay & Android Auto",
+      "Climate Control (4-zone)",
+    ],
   },
   {
     id: "2",

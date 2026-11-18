@@ -16,11 +16,16 @@ function VehicleCard({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.5, delay: index * 0.1 }}
-      className="group relative bg-surface rounded-2xl border border-white/5 overflow-hidden hover:border-orange/20 transition-all duration-500"
+      initial={{ opacity: 0, y: 40, scale: 0.95 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      viewport={{ once: true, margin: "-80px" }}
+      transition={{
+        duration: 0.6,
+        delay: index * 0.1,
+        ease: [0.22, 1, 0.36, 1],
+      }}
+      whileHover={{ y: -8, transition: { duration: 0.3 } }}
+      className="group relative bg-surface rounded-2xl border border-white/5 overflow-hidden hover:border-orange/20 hover:shadow-2xl hover:shadow-orange/5 transition-all duration-500"
     >
       {/* Image */}
       <div className="relative aspect-[16/10] overflow-hidden">

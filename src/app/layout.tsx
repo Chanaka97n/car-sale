@@ -3,6 +3,7 @@ import { Inter, Oswald } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
+import { SmoothLayout } from "@/components/shared/smooth-layout";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -42,9 +43,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} ${oswald.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        <SmoothLayout>
+          <Header />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </SmoothLayout>
       </body>
     </html>
   );

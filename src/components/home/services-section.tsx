@@ -9,6 +9,15 @@ import {
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+const FloatingOrbs = dynamic(
+  () =>
+    import("@/components/three/floating-orbs").then((m) => ({
+      default: m.FloatingOrbs,
+    })),
+  { ssr: false },
+);
 
 const services = [
   {
@@ -45,22 +54,51 @@ const services = [
   },
 ];
 
+const cardVariants = {
+  hidden: { opacity: 0, y: 40, rotateX: 15 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    rotateX: 0,
+    transition: {
+      duration: 0.6,
+      delay: i * 0.12,
+      ease: [0.22, 1, 0.36, 1] as const,
+    },
+  }),
+};
+
 export function ServicesSection() {
   return (
     <section className="py-24 relative overflow-hidden">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <FloatingOrbs />
+
+      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
+          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
           className="text-center mb-16"
         >
           <div className="flex items-center justify-center gap-3 mb-3">
-            <div className="w-8 h-px bg-orange" />
+            <motion.div
+              initial={{ width: 0 }}
+              whileInView={{ width: 32 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="h-px bg-orange"
+            />
             <span className="text-sm font-medium text-orange uppercase tracking-wider">
               Our Services
             </span>
-            <div className="w-8 h-px bg-orange" />
+            <motion.div
+              initial={{ width: 0 }}
+              whileInView={{ width: 32 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="h-px bg-orange"
+            />
           </div>
           <h2 className="font-heading text-4xl sm:text-5xl font-bold uppercase text-white">
             The MVA <span className="text-gradient">Difference</span>
@@ -71,25 +109,26 @@ export function ServicesSection() {
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" style={{ perspective: "1000px" }}>
           {services.map((service, i) => (
             <motion.div
               key={service.title}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.1 }}
+              custom={i}
+              variants={cardVariants}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "-50px" }}
             >
               <Link
                 href={service.href}
-                className="group block h-full bg-surface rounded-2xl border border-white/5 p-6 hover:border-orange/20 transition-all duration-500 relative overflow-hidden"
+                className="group block h-full bg-surface rounded-2xl border border-white/5 p-6 hover:border-orange/20 transition-all duration-500 relative overflow-hidden hover:-translate-y-2 hover:shadow-xl hover:shadow-orange/5"
               >
                 <div
                   className={`absolute inset-0 bg-gradient-to-br ${service.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
                 />
 
                 <div className="relative">
-                  <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-5 group-hover:border-orange/30 transition-colors">
+                  <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-5 group-hover:border-orange/30 group-hover:scale-110 transition-all duration-300">
                     <service.icon className="w-6 h-6 text-orange" />
                   </div>
 
@@ -102,7 +141,7 @@ export function ServicesSection() {
 
                   <span className="inline-flex items-center gap-1 text-sm font-medium text-orange group-hover:gap-2 transition-all">
                     Learn More
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </span>
                 </div>
               </Link>

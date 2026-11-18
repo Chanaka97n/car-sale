@@ -15,6 +15,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import { AnimatedCounter } from "@/components/shared/animated-counter";
+
+const SpeedGauge3D = dynamic(
+  () =>
+    import("@/components/three/speed-gauge").then((m) => ({
+      default: m.SpeedGauge3D,
+    })),
+  { ssr: false },
+);
 
 export default function FinancePage() {
   const [loanAmount, setLoanAmount] = useState([25000]);
@@ -40,22 +50,33 @@ export default function FinancePage() {
       <section className="relative pt-32 pb-16 overflow-hidden">
         <div className="absolute inset-0 hero-gradient" />
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <span className="text-sm text-orange uppercase tracking-wider font-medium">
-              Vehicle Finance
-            </span>
-            <h1 className="font-heading text-5xl sm:text-6xl font-bold uppercase text-white mt-2">
-              Flexible{" "}
-              <span className="text-gradient">Finance Options</span>
-            </h1>
-            <p className="mt-4 text-zinc-400 max-w-lg">
-              Make your next car more affordable with our tailored finance
-              solutions. Competitive rates and a simple, straightforward process.
-            </p>
-          </motion.div>
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <span className="text-sm text-orange uppercase tracking-wider font-medium">
+                Vehicle Finance
+              </span>
+              <h1 className="font-heading text-5xl sm:text-6xl font-bold uppercase text-white mt-2">
+                Flexible{" "}
+                <span className="text-gradient">Finance Options</span>
+              </h1>
+              <p className="mt-4 text-zinc-400 max-w-lg">
+                Make your next car more affordable with our tailored finance
+                solutions. Competitive rates and a simple, straightforward
+                process.
+              </p>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3, duration: 0.8 }}
+              className="hidden lg:block h-[300px]"
+            >
+              <SpeedGauge3D />
+            </motion.div>
+          </div>
         </div>
       </section>
 

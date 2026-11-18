@@ -63,7 +63,8 @@ export function HeroSection() {
     restDelta: 0.001,
   });
 
-  useMotionValueEvent(smoothProgress, "change", (p) => {
+  useMotionValueEvent(smoothProgress, "change", (raw) => {
+    const p = Math.min(1, Math.max(0, raw));
     const slideIdx = Math.min(
       heroSlides.length - 1,
       Math.floor(p * heroSlides.length)
@@ -107,6 +108,7 @@ export function HeroSection() {
   ];
 
   const activeBand = bands[bandIndex];
+  const slide = heroSlides[currentSlide] ?? heroSlides[0];
 
   return (
     <>
@@ -124,8 +126,8 @@ export function HeroSection() {
               transition={{ duration: 0.6, ease: [0.22, 0.8, 0.28, 1] }}
             >
               <motion.img
-                src={heroSlides[currentSlide].image}
-                alt={`${heroSlides[currentSlide].make} ${heroSlides[currentSlide].model}`}
+                src={slide.image}
+                alt={`${slide.make} ${slide.model}`}
                 className="w-full h-full object-cover will-change-transform"
                 style={{ scale: imageScale, y: imageY }}
               />
@@ -294,18 +296,18 @@ export function HeroSection() {
                 className="glass rounded-2xl p-5 border border-white/10 min-w-[200px]"
               >
                 <span className="inline-block px-2.5 py-0.5 rounded-full bg-orange/20 border border-orange/30 text-orange text-[0.65rem] font-medium tracking-wider uppercase mb-2">
-                  {heroSlides[currentSlide].tag}
+                  {slide.tag}
                 </span>
                 <h3 className="text-lg font-bold text-white leading-tight">
-                  {heroSlides[currentSlide].make}
+                  {slide.make}
                 </h3>
                 <p className="text-sm text-white/70">
-                  {heroSlides[currentSlide].model}
+                  {slide.model}
                 </p>
                 <p className="text-xs text-zinc-500 mt-1.5">
                   From{" "}
                   <span className="text-orange font-semibold">
-                    {heroSlides[currentSlide].price}
+                    {slide.price}
                   </span>
                 </p>
               </motion.div>

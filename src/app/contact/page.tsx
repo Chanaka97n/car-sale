@@ -8,11 +8,17 @@ import {
   MapPin,
   Clock,
   MessageSquare,
-  Calendar,
+  Calendar as CalendarIcon,
   ArrowRight,
   Send,
   ChevronDown,
 } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,7 +60,7 @@ const contactMethods = [
     href: "#",
   },
   {
-    icon: Calendar,
+    icon: CalendarIcon,
     title: "Book a Visit",
     detail: "Arrange a test drive",
     sub: "Or an in-person consultation.",
@@ -113,6 +119,10 @@ const enquiryTypes = [
 ];
 
 export default function ContactPage() {
+  const [date, setDate] = useState<Date | undefined>(undefined);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [disableBefore, setDisableBefore] = useState<Date | undefined>(undefined);
+
   return (
     <>
       {/* Hero */}
@@ -214,10 +224,40 @@ export default function ContactPage() {
                       <Label className="text-xs text-zinc-400 mb-1.5 block">
                         Preferred Date
                       </Label>
-                      <Input
-                        type="date"
-                        className="rounded-xl bg-white/5 border-white/10 text-white"
-                      />
+                      <Popover open={dateOpen} onOpenChange={(open) => {
+                          if (open) setDisableBefore(new Date());
+                          setDateOpen(open);
+                        }}>
+                        <PopoverTrigger
+                          className="flex h-10 w-full items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3 text-sm text-white cursor-pointer hover:bg-white/10 transition-colors"
+                        >
+                          <span className={date ? "text-white" : "text-zinc-500"}>
+                            {date
+                              ? date.toLocaleDateString("en-GB", {
+                                  day: "numeric",
+                                  month: "long",
+                                  year: "numeric",
+                                })
+                              : "Pick a date"}
+                          </span>
+                          <CalendarIcon className="w-4 h-4 text-zinc-500" />
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="start"
+                          className="w-auto p-0 bg-surface border-white/10"
+                        >
+                          <Calendar
+                            mode="single"
+                            selected={date}
+                            onSelect={(d) => {
+                              setDate(d ?? undefined);
+                              setDateOpen(false);
+                            }}
+                            disabled={disableBefore ? { before: disableBefore } : undefined}
+                            className="[--cell-size:--spacing(8)]"
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <div>
                       <Label className="text-xs text-zinc-400 mb-1.5 block">

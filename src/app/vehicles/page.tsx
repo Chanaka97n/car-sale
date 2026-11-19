@@ -665,7 +665,7 @@ function VehiclesContent() {
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
                       aria-label="Previous page"
-                      className="w-10 h-10 rounded-xl text-sm font-medium flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 hover:border-white/20"
+                      className="w-10 h-10 rounded-xl text-sm font-medium flex items-center justify-center transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 hover:border-white/20"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
@@ -687,7 +687,7 @@ function VehiclesContent() {
                           aria-current={
                             page === currentPage ? "page" : undefined
                           }
-                          className={`w-10 h-10 rounded-xl text-sm font-medium transition-all ${
+                          className={`w-10 h-10 rounded-xl text-sm font-medium transition-all cursor-pointer ${
                             page === currentPage
                               ? "bg-orange text-white shadow-lg shadow-orange/25 scale-110 ring-2 ring-orange/30"
                               : "text-zinc-400 hover:text-white hover:bg-white/5 border border-white/10 hover:border-white/20"
@@ -703,7 +703,7 @@ function VehiclesContent() {
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
                       aria-label="Next page"
-                      className="w-10 h-10 rounded-xl text-sm font-medium flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 hover:border-white/20"
+                      className="w-10 h-10 rounded-xl text-sm font-medium flex items-center justify-center transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 hover:border-white/20"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>

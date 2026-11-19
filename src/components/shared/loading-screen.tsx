@@ -46,7 +46,7 @@ export function LoadingScreen() {
           >
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange to-orange-dark flex items-center justify-center">
               <span className="text-white font-bold text-2xl font-heading">
-                M
+                A
               </span>
             </div>
           </motion.div>
@@ -67,7 +67,7 @@ export function LoadingScreen() {
             transition={{ delay: 0.3 }}
             className="text-xs text-zinc-600 mt-4 uppercase tracking-widest"
           >
-            MVA Motor Company
+            Apex Select Automotive
           </motion.p>
         </motion.div>
       )}

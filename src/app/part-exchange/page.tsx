@@ -66,7 +66,7 @@ export default function PartExchangePage() {
             </h1>
             <p className="mt-4 text-zinc-400 max-w-lg">
               Get a fair, competitive valuation for your current car and put it
-              towards your next vehicle with MVA Motor.
+              towards your next vehicle with Apex Select.
             </p>
           </motion.div>
         </div>

@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ArrowRight,
   Star,
+  Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -16,27 +17,27 @@ import Link from "next/link";
 const values = [
   {
     icon: Shield,
-    title: "Quality First",
+    title: "Putting Quality First",
     description:
-      "Every vehicle in our stock undergoes a rigorous multi-point inspection. We only sell cars we'd drive ourselves.",
-  },
-  {
-    icon: Award,
-    title: "Transparency",
-    description:
-      "No hidden fees, no pressure tactics. Just honest pricing and straightforward advice you can trust.",
+      "Every vehicle we sell is carefully selected and thoroughly inspected. We focus on quality over quantity, so you can browse with confidence.",
   },
   {
     icon: Users,
-    title: "Customer Focus",
+    title: "A Personal Approach",
     description:
-      "Your satisfaction is our priority. We build lasting relationships, not just transactions.",
+      "We take the time to understand what you're looking for and guide you through the process — no pressure, no rush.",
   },
   {
-    icon: Target,
-    title: "Expertise",
+    icon: Award,
+    title: "Transparency You Can Trust",
     description:
-      "Our team brings decades of automotive experience to help you find the perfect vehicle.",
+      "Honest pricing, clear vehicle histories, and straightforward advice. What you see is what you get.",
+  },
+  {
+    icon: Eye,
+    title: "Our Vision",
+    description:
+      "To become a trusted name in the used car market by consistently delivering quality vehicles and an outstanding customer experience.",
   },
 ];
 
@@ -44,7 +45,7 @@ const stats = [
   { value: "500+", label: "Vehicles Sold" },
   { value: "150+", label: "5-Star Reviews" },
   { value: "98%", label: "Customer Satisfaction" },
-  { value: "10+", label: "Years Experience" },
+  { value: "100%", label: "Quality Inspected" },
 ];
 
 export default function AboutPage() {
@@ -62,12 +63,13 @@ export default function AboutPage() {
               About Us
             </span>
             <h1 className="font-heading text-5xl sm:text-6xl font-bold uppercase text-white mt-2">
-              The MVA Motor{" "}
-              <span className="text-gradient">Company Story</span>
+              Driven by Quality.{" "}
+              <span className="text-gradient">Built on Trust.</span>
             </h1>
             <p className="mt-4 text-zinc-400 max-w-lg">
-              Built on passion, trust and a commitment to excellence in every
-              vehicle we sell.
+              At Apex Select Automotive, we&apos;re building something different
+              — a car-buying experience rooted in quality, transparency and
+              genuine care.
             </p>
           </motion.div>
         </div>
@@ -83,27 +85,26 @@ export default function AboutPage() {
               viewport={{ once: true }}
             >
               <h2 className="font-heading text-4xl font-bold uppercase text-white mb-6">
-                Driven By <span className="text-gradient">Passion</span>
+                Putting Quality <span className="text-gradient">First</span>
               </h2>
               <div className="space-y-4 text-zinc-400 leading-relaxed">
                 <p>
-                  MVA Motor Company was founded with a simple mission: to make
-                  buying a premium used car an experience you actually enjoy. No
-                  pressure, no gimmicks — just quality vehicles and honest
-                  advice.
+                  Apex Select Automotive was founded with a clear mission: to
+                  offer quality used and imported vehicles with a service that
+                  puts the customer first.
                 </p>
                 <p>
-                  Based in Manchester, we&apos;ve built our reputation on
-                  carefully curating our stock, ensuring every vehicle meets our
-                  high standards before it reaches our forecourt. Our team of
-                  automotive enthusiasts handpick each car, so you can browse
-                  with confidence.
+                  Based in Weston-super-Mare, we carefully select every vehicle
+                  in our range, ensuring it meets our high standards before it
+                  ever reaches you. Whether you&apos;re looking for a reliable
+                  everyday car or something a little more special, we&apos;re
+                  here to help you find the right fit.
                 </p>
                 <p>
-                  Whether you&apos;re looking for a family SUV, a performance
-                  saloon or an eco-friendly hybrid, we&apos;ve got you covered
-                  with flexible finance options and competitive part exchange
-                  valuations.
+                  We believe buying a car should be an exciting experience, not a
+                  stressful one. That&apos;s why we focus on making the process
+                  as straightforward, transparent and enjoyable as possible — from
+                  your first enquiry to the moment you drive away.
                 </p>
               </div>
               <Link href="/vehicles" className="inline-block mt-8">
@@ -123,7 +124,7 @@ export default function AboutPage() {
               <div className="aspect-[4/3] rounded-3xl overflow-hidden">
                 <img
                   src="https://images.unsplash.com/photo-1562141961-b5d1de9a7708?w=800&h=600&fit=crop"
-                  alt="MVA Motor Company showroom"
+                  alt="Apex Select Automotive"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -156,8 +157,54 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Values */}
+      {/* A Personal Approach */}
       <section className="py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="order-2 lg:order-1"
+            >
+              <div className="aspect-[4/3] rounded-3xl overflow-hidden">
+                <img
+                  src="https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=800&h=600&fit=crop"
+                  alt="Personal approach to car buying"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="order-1 lg:order-2"
+            >
+              <h2 className="font-heading text-4xl font-bold uppercase text-white mb-6">
+                A Personal <span className="text-gradient">Approach</span>
+              </h2>
+              <div className="space-y-4 text-zinc-400 leading-relaxed">
+                <p>
+                  We take the time to understand what you&apos;re looking for and
+                  guide you through the process at your pace. Whether you have
+                  questions about a specific vehicle, need help arranging finance,
+                  or simply want honest advice — we&apos;re here for you.
+                </p>
+                <p>
+                  Our goal is to build lasting relationships with our customers,
+                  not just complete a sale. We want you to feel confident and
+                  excited about your purchase, every step of the way.
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* Values */}
+      <section className="py-24 bg-surface/30">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -166,10 +213,10 @@ export default function AboutPage() {
             className="text-center mb-16"
           >
             <h2 className="font-heading text-4xl font-bold uppercase text-white">
-              Our <span className="text-gradient">Values</span>
+              Why Choose <span className="text-gradient">Apex Select</span>
             </h2>
             <p className="mt-4 text-zinc-400 max-w-2xl mx-auto">
-              The principles that guide everything we do at MVA Motor Company.
+              The principles that guide everything we do.
             </p>
           </motion.div>
 
@@ -221,8 +268,8 @@ export default function AboutPage() {
                 Ready to Find Your Next Car?
               </h2>
               <p className="text-white/80 max-w-md mx-auto mb-8">
-                Visit our showroom or browse online. Our team is here to help
-                you every step of the way.
+                Browse our latest stock or get in touch. Our team is here to
+                help you every step of the way.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Link href="/vehicles">

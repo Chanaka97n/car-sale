@@ -230,7 +230,7 @@ export default function FinancePage() {
             className="text-center mb-12"
           >
             <h2 className="font-heading text-3xl font-bold uppercase text-white">
-              Why Finance With <span className="text-gradient">MVA</span>?
+              Why Finance With <span className="text-gradient">Apex Select</span>?
             </h2>
           </motion.div>
 

@@ -91,18 +91,18 @@ export function HeroSection() {
 
   const bands = [
     {
-      kicker: "PREMIUM USED VEHICLES",
-      heading: "Drive Your Dream Car Today",
+      kicker: "QUALITY USED & IMPORTED VEHICLES",
+      heading: "Quality Cars. Confidence in Every Journey.",
       sub: null,
     },
     {
-      kicker: "CURATED COLLECTION",
-      heading: "Hand-Picked. Inspected. Ready.",
-      sub: "Every vehicle in our showroom passes a rigorous multi-point inspection before it reaches you.",
+      kicker: "A BETTER WAY TO BUY",
+      heading: "Straightforward. Transparent. Enjoyable.",
+      sub: "We believe buying a car should be an exciting experience, not a stressful one.",
     },
     {
-      kicker: "MVA MOTOR COMPANY",
-      heading: "Where Quality Meets Value",
+      kicker: "APEX SELECT AUTOMOTIVE",
+      heading: "Discover Your Next Car",
       sub: null,
     },
   ];

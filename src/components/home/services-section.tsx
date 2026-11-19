@@ -91,11 +91,11 @@ export function ServicesSection() {
             />
           </div>
           <h2 className="font-heading text-4xl sm:text-5xl font-bold uppercase text-white">
-            The MVA <span className="text-gradient">Difference</span>
+            The Apex Select <span className="text-gradient">Difference</span>
           </h2>
           <p className="mt-4 text-zinc-400 max-w-2xl mx-auto">
-            From finding your perfect car to arranging finance and part exchange,
-            we make every step seamless.
+            From sourcing quality vehicles to arranging finance and part exchange,
+            we make every step straightforward and enjoyable.
           </p>
         </motion.div>
 

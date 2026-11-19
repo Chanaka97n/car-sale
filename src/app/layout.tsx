@@ -17,21 +17,21 @@ const oswald = Oswald({
 });
 
 export const metadata: Metadata = {
-  title: "MVA Motor Company | Premium Used Cars in Manchester",
+  title: "Apex Select Automotive | Quality Used & Imported Vehicles",
   description:
-    "Discover a curated selection of premium used vehicles at MVA Motor Company. Quality hand-picked cars with flexible finance options in Manchester.",
+    "Discover quality used and imported vehicles at Apex Select Automotive. Straightforward, transparent car buying in Weston-super-Mare.",
   keywords: [
     "used cars",
-    "premium cars",
-    "manchester",
+    "imported vehicles",
+    "weston-super-mare",
     "car dealership",
-    "finance",
-    "part exchange",
+    "quality cars",
+    "apex select automotive",
   ],
   openGraph: {
-    title: "MVA Motor Company | Premium Used Cars",
+    title: "Apex Select Automotive | Quality Used & Imported Vehicles",
     description:
-      "Quality hand-picked used vehicles with flexible finance options.",
+      "Quality used and imported vehicles with a transparent, customer-focused approach.",
     type: "website",
   },
 };

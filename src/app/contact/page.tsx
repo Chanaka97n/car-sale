@@ -42,9 +42,9 @@ const contactMethods = [
   {
     icon: Mail,
     title: "Email Us",
-    detail: "info@mvamotorcompany.co.uk",
+    detail: "info@apexselectautomotive.co.uk",
     sub: "Send us your enquiry and we'll get back to you shortly.",
-    href: "mailto:info@mvamotorcompany.co.uk",
+    href: "mailto:info@apexselectautomotive.co.uk",
   },
   {
     icon: MessageSquare,
@@ -81,7 +81,7 @@ const faqs = [
   },
   {
     q: "Where are you located?",
-    a: "We're based in Manchester, UK. Visit our showroom to see our full range of premium used vehicles in person.",
+    a: "We're based in Weston-super-Mare, UK. Please contact us before arranging a visit, as our vehicle viewing location is yet to be confirmed.",
   },
 ];
 
@@ -132,7 +132,7 @@ export default function ContactPage() {
               <span className="text-gradient">Or Book A Test Drive</span>
             </h1>
             <p className="mt-4 text-zinc-400 max-w-lg">
-              Speak to the MVA team, book a personalised test drive, or get
+              Speak to the Apex Select team, book a personalised test drive, or get
               expert advice on finding your next car.
             </p>
             <div className="flex gap-4 mt-8">
@@ -310,7 +310,7 @@ export default function ContactPage() {
                       className="text-xs text-zinc-400 leading-relaxed cursor-pointer"
                     >
                       I&apos;d like to receive vehicle updates, offers and news
-                      from MVA Motor. You can unsubscribe at any time.
+                      from Apex Select Automotive. You can unsubscribe at any time.
                     </Label>
                   </div>
 
@@ -342,12 +342,15 @@ export default function ContactPage() {
                 </span>
               </div>
               <h2 className="font-heading text-4xl font-bold uppercase text-white mb-6">
-                Visit <span className="text-gradient">MVA Motor</span>
+                Visit <span className="text-gradient">Apex Select</span>
               </h2>
-              <p className="text-zinc-400 mb-8">
-                Find us at our showroom, where our team is ready to help with
-                vehicle enquiries, test drives, finance and part exchange
-                valuations.
+              <p className="text-zinc-400 mb-4">
+                Our team is ready to help with vehicle enquiries, test drives,
+                finance and part exchange valuations.
+              </p>
+              <p className="text-sm text-orange/80 mb-8 italic">
+                Please contact us before arranging a visit. Our vehicle viewing
+                location is yet to be confirmed.
               </p>
 
               <div className="space-y-4">
@@ -357,9 +360,11 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <p className="font-semibold text-white">
-                      MVA Motor Company
+                      Apex Select Automotive
                     </p>
-                    <p className="text-sm text-zinc-400">Manchester, UK</p>
+                    <p className="text-sm text-zinc-400">
+                      10B Orchard Street, Weston-super-Mare, UK
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -373,7 +378,7 @@ export default function ContactPage() {
                     <Mail className="w-5 h-5 text-orange" />
                   </div>
                   <p className="text-sm text-zinc-400">
-                    info@mvamotorcompany.co.uk
+                    info@apexselectautomotive.co.uk
                   </p>
                 </div>
               </div>

@@ -13,11 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const quickLinks = [
-  { label: "Vehicles", href: "/vehicles" },
-  { label: "Finance", href: "/finance" },
-  { label: "Part Exchange", href: "/part-exchange" },
+  { label: "Services", href: "/services" },
+  { label: "Inventory", href: "/vehicles" },
   { label: "About Us", href: "/about" },
   { label: "Contact", href: "/contact" },
+  { label: "Finance", href: "/finance" },
 ];
 
 const infoLinks = [

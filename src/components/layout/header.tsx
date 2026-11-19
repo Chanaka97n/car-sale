@@ -9,21 +9,21 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const navLinks = [
   {
-    label: "Vehicles",
+    label: "Services",
+    href: "/services",
+    children: [
+      { label: "Quality Used Car Sales", href: "/services#quality-used-cars" },
+      { label: "Imported Vehicles", href: "/services#imported-vehicles" },
+      { label: "Personalised Assistance", href: "/services#personalised-assistance" },
+    ],
+  },
+  {
+    label: "Inventory",
     href: "/vehicles",
     children: [
       { label: "All Vehicles", href: "/vehicles" },
       { label: "SUVs", href: "/vehicles?body=SUV" },
       { label: "Saloons", href: "/vehicles?body=Saloon" },
-      { label: "Imported Vehicles", href: "/vehicles" },
-    ],
-  },
-  {
-    label: "Services",
-    href: "/finance",
-    children: [
-      { label: "Finance Options", href: "/finance" },
-      { label: "Part Exchange", href: "/part-exchange" },
     ],
   },
   { label: "About", href: "/about" },

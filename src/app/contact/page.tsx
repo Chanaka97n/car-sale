@@ -124,16 +124,17 @@ export default function ContactPage() {
             animate={{ opacity: 1, y: 0 }}
           >
             <span className="text-sm text-orange uppercase tracking-wider font-medium">
-              Contact / Book a Test Drive
+              Contact Us
             </span>
             <h1 className="font-heading text-5xl sm:text-6xl font-bold uppercase text-white mt-2">
-              Get In Touch
-              <br />
-              <span className="text-gradient">Or Book A Test Drive</span>
+              We&apos;d Love to{" "}
+              <span className="text-gradient">Hear From You</span>
             </h1>
             <p className="mt-4 text-zinc-400 max-w-lg">
-              Speak to the Apex Select team, book a personalised test drive, or get
-              expert advice on finding your next car.
+              Have a question about one of our vehicles or want to find out more
+              about what we offer? Whether you&apos;re enquiring about our used
+              cars, imported vehicles or general availability, our team is here
+              to help.
             </p>
             <div className="flex gap-4 mt-8">
               <Button className="bg-orange hover:bg-orange-dark text-white rounded-full px-8 gap-2">

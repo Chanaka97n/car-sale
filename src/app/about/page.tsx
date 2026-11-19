@@ -67,9 +67,10 @@ export default function AboutPage() {
               <span className="text-gradient">Built on Trust.</span>
             </h1>
             <p className="mt-4 text-zinc-400 max-w-lg">
-              At Apex Select Automotive, we&apos;re building something different
-              — a car-buying experience rooted in quality, transparency and
-              genuine care.
+              Apex Select Automotive is a new independent automotive business
+              with a clear ambition: to offer quality used and imported vehicles
+              alongside excellent customer service and a buying experience
+              customers can feel confident about.
             </p>
           </motion.div>
         </div>

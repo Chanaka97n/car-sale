@@ -1,5 +1,4 @@
 import { HeroSection } from "@/components/home/hero-section";
-import { SearchBar } from "@/components/home/search-bar";
 import { BrandsSection } from "@/components/home/brands-section";
 import { FeaturedVehicles } from "@/components/home/featured-vehicles";
 import { CarShowcase } from "@/components/home/car-showcase";
@@ -13,7 +12,6 @@ export default function Home() {
   return (
     <>
       <HeroSection />
-      <SearchBar />
       <BrandsSection />
       <SvgDivider />
       <FeaturedVehicles />

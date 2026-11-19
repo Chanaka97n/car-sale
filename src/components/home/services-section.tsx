@@ -3,9 +3,8 @@
 import { motion } from "framer-motion";
 import {
   Car,
-  PiggyBank,
-  ArrowLeftRight,
-  ShieldCheck,
+  Globe,
+  Users,
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
@@ -13,35 +12,27 @@ import Link from "next/link";
 const services = [
   {
     icon: Car,
-    title: "Explore Our Stock",
+    title: "Quality Used Car Sales",
     description:
-      "Browse our curated collection of premium used vehicles, all carefully inspected and ready to drive.",
+      "We aim to offer a selection of quality pre-owned vehicles to suit different lifestyles, preferences and budgets.",
     href: "/vehicles",
     color: "from-orange/20 to-orange-dark/10",
   },
   {
-    icon: PiggyBank,
-    title: "Flexible Finance",
+    icon: Globe,
+    title: "Imported Vehicles",
     description:
-      "Tailored finance solutions with competitive rates to make your next car more affordable.",
-    href: "/finance",
+      "Explore a wider range of automotive options with our imported vehicle selection, bringing quality and choice together.",
+    href: "/vehicles",
     color: "from-blue-500/20 to-blue-600/10",
   },
   {
-    icon: ArrowLeftRight,
-    title: "Part Exchange",
+    icon: Users,
+    title: "Personalised Assistance",
     description:
-      "Get a fair valuation for your current vehicle and use it towards your next car with us.",
-    href: "/part-exchange",
+      "We provide helpful information and straightforward communication so you can explore your options with confidence.",
+    href: "/contact",
     color: "from-emerald-500/20 to-emerald-600/10",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Quality Assured",
-    description:
-      "Every vehicle undergoes a comprehensive multi-point inspection before it reaches our forecourt.",
-    href: "/about",
-    color: "from-purple-500/20 to-purple-600/10",
   },
 ];
 
@@ -91,15 +82,16 @@ export function ServicesSection() {
             />
           </div>
           <h2 className="font-heading text-4xl sm:text-5xl font-bold uppercase text-white">
-            The Apex Select <span className="text-gradient">Difference</span>
+            Helping You Find the{" "}
+            <span className="text-gradient">Right Vehicle</span>
           </h2>
           <p className="mt-4 text-zinc-400 max-w-2xl mx-auto">
-            From sourcing quality vehicles to arranging finance and part exchange,
-            we make every step straightforward and enjoyable.
+            Quality used and imported vehicles, supported by a professional and
+            customer-focused approach.
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" style={{ perspective: "1000px" }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" style={{ perspective: "1000px" }}>
           {services.map((service, i) => (
             <motion.div
               key={service.title}

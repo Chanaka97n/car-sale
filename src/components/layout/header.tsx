@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Search, Heart, Phone, ChevronDown } from "lucide-react";
+import { Menu, Search, Heart, Phone, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const navLinks = [
+  { label: "Home", href: "/" },
   {
     label: "Services",
     href: "/services",
@@ -54,23 +55,12 @@ export function Header() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange to-orange-dark flex items-center justify-center">
-                <span className="text-white font-bold text-lg font-heading">
-                  A
-                </span>
-              </div>
-              <div className="absolute -inset-1 rounded-xl bg-orange/20 blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <div className="hidden sm:block">
-              <p className="text-lg font-bold tracking-tight text-white">
-                APEX SELECT
-              </p>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground -mt-1">
-                Automotive
-              </p>
-            </div>
+          <Link href="/" className="flex items-center group">
+            <img
+              src="/images/logo.png"
+              alt="Apex Select Automotive"
+              className="h-12 sm:h-14 w-auto"
+            />
           </Link>
 
           {/* Desktop Nav */}
@@ -142,8 +132,11 @@ export function Header() {
               >
                 <div className="flex flex-col h-full">
                   <div className="p-6 border-b border-white/10">
-                    <p className="text-lg font-bold text-white">APEX SELECT</p>
-                    <p className="text-xs text-muted-foreground">Automotive</p>
+                    <img
+                      src="/images/logo.png"
+                      alt="Apex Select Automotive"
+                      className="h-10 w-auto"
+                    />
                   </div>
                   <nav className="flex-1 p-4">
                     {navLinks.map((link) => (

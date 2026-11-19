@@ -72,16 +72,12 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
           {/* Brand */}
           <div>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange to-orange-dark flex items-center justify-center">
-                <span className="text-white font-bold text-lg">A</span>
-              </div>
-              <div>
-                <p className="text-lg font-bold text-white">APEX SELECT</p>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground -mt-1">
-                  Automotive
-                </p>
-              </div>
+            <div className="mb-6">
+              <img
+                src="/images/logo.png"
+                alt="Apex Select Automotive"
+                className="h-14 w-auto"
+              />
             </div>
             <div className="space-y-3 text-sm text-zinc-400">
               <div className="flex items-start gap-3">

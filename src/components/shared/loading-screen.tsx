@@ -44,11 +44,11 @@ export function LoadingScreen() {
             transition={{ duration: 0.5 }}
             className="mb-8"
           >
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange to-orange-dark flex items-center justify-center">
-              <span className="text-white font-bold text-2xl font-heading">
-                A
-              </span>
-            </div>
+            <img
+              src="/images/logo.png"
+              alt="Apex Select Automotive"
+              className="h-16 w-auto"
+            />
           </motion.div>
 
           {/* Progress bar */}

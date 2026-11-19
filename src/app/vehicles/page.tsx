@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useRef, useCallback, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Search,
   SlidersHorizontal,
-  Heart,
   Fuel,
   Gauge,
   Zap,
   ArrowRight,
   Grid3X3,
   List,
-  X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,11 +29,114 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { vehicles, makes, bodyTypes, fuelTypes } from "@/lib/data";
 import Link from "next/link";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import {
+  setSearch,
+  setMake,
+  setPriceRange,
+  setYearFrom,
+  setYearTo,
+  toggleFuelType,
+  toggleTransmission,
+  toggleBodyType,
+  setSortBy,
+  setPage,
+  setFiltersFromParams,
+  resetFilters,
+  fetchVehicles,
+  selectFilters,
+  selectPaginatedVehicles,
+  selectCurrentPage,
+  selectTotalPages,
+  selectTotalCount,
+  selectPageSize,
+  selectStatus,
+  initialFilters,
+  MAKES,
+  BODY_TYPES,
+  FUEL_TYPES,
+  type VehicleFilters,
+} from "@/redux/vehicles/vehiclesIndex";
+
+// --- Search params helpers ---
+
+function filtersToSearchParams(
+  filters: VehicleFilters,
+  page: number,
+): URLSearchParams {
+  const params = new URLSearchParams();
+
+  if (filters.search) params.set("search", filters.search);
+  if (filters.make) params.set("make", filters.make);
+  if (
+    filters.priceRange[0] !== initialFilters.priceRange[0] ||
+    filters.priceRange[1] !== initialFilters.priceRange[1]
+  ) {
+    params.set("priceMin", filters.priceRange[0].toString());
+    params.set("priceMax", filters.priceRange[1].toString());
+  }
+  if (filters.yearFrom) params.set("yearFrom", filters.yearFrom);
+  if (filters.yearTo) params.set("yearTo", filters.yearTo);
+  if (filters.fuelTypes.length > 0)
+    params.set("fuel", filters.fuelTypes.join(","));
+  if (filters.transmissions.length > 0)
+    params.set("transmission", filters.transmissions.join(","));
+  if (filters.bodyTypes.length > 0)
+    params.set("body", filters.bodyTypes.join(","));
+  if (filters.sortBy !== "newest") params.set("sort", filters.sortBy);
+  if (page > 1) params.set("page", page.toString());
+
+  return params;
+}
+
+function searchParamsToFilters(params: URLSearchParams): Partial<VehicleFilters> & { page?: number } {
+  const result: Partial<VehicleFilters> & { page?: number } = {};
+
+  const search = params.get("search");
+  if (search) result.search = search;
+
+  const make = params.get("make");
+  if (make) result.make = make;
+
+  const priceMin = params.get("priceMin");
+  const priceMax = params.get("priceMax");
+  if (priceMin || priceMax) {
+    result.priceRange = [
+      priceMin ? parseInt(priceMin) : initialFilters.priceRange[0],
+      priceMax ? parseInt(priceMax) : initialFilters.priceRange[1],
+    ];
+  }
+
+  const yearFrom = params.get("yearFrom");
+  if (yearFrom) result.yearFrom = yearFrom;
+
+  const yearTo = params.get("yearTo");
+  if (yearTo) result.yearTo = yearTo;
+
+  const fuel = params.get("fuel");
+  if (fuel) result.fuelTypes = fuel.split(",");
+
+  const transmission = params.get("transmission");
+  if (transmission) result.transmissions = transmission.split(",");
+
+  const body = params.get("body");
+  if (body) result.bodyTypes = body.split(",");
+
+  const sort = params.get("sort") as VehicleFilters["sortBy"] | null;
+  if (sort) result.sortBy = sort;
+
+  const page = params.get("page");
+  if (page) result.page = parseInt(page);
+
+  return result;
+}
+
+// --- Filter sidebar ---
 
 function FilterSidebar({ className = "" }: { className?: string }) {
-  const [priceRange, setPriceRange] = useState([5000, 100000]);
+  const dispatch = useAppDispatch();
+  const filters = useAppSelector(selectFilters);
 
   return (
     <div className={className}>
@@ -46,6 +150,8 @@ function FilterSidebar({ className = "" }: { className?: string }) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
             <Input
               placeholder="e.g. BMW 3 Series, SUV"
+              value={filters.search}
+              onChange={(e) => dispatch(setSearch(e.target.value))}
               className="pl-10 rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-500"
             />
           </div>
@@ -54,12 +160,18 @@ function FilterSidebar({ className = "" }: { className?: string }) {
         {/* Make */}
         <div>
           <h3 className="text-sm font-semibold text-white mb-3">Make</h3>
-          <Select>
+          <Select
+            value={filters.make || "all"}
+            onValueChange={(val) =>
+              dispatch(setMake(!val || val === "all" ? "" : val))
+            }
+          >
             <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white">
               <SelectValue placeholder="Any Make" />
             </SelectTrigger>
             <SelectContent className="bg-surface border-white/10">
-              {makes.map((make) => (
+              <SelectItem value="all">Any Make</SelectItem>
+              {MAKES.map((make) => (
                 <SelectItem key={make} value={make.toLowerCase()}>
                   {make}
                 </SelectItem>
@@ -74,17 +186,23 @@ function FilterSidebar({ className = "" }: { className?: string }) {
             Price Range
           </h3>
           <Slider
-            value={priceRange}
-            onValueChange={(val) => setPriceRange(Array.isArray(val) ? val : [val])}
+            value={filters.priceRange as unknown as number[]}
+            onValueChange={(val) =>
+              dispatch(
+                setPriceRange(
+                  Array.isArray(val) ? [val[0], val[1]] : [val, val],
+                ),
+              )
+            }
             min={0}
             max={150000}
             step={1000}
             className="mb-4"
           />
           <div className="flex items-center gap-2 text-sm text-zinc-400">
-            <span>&pound;{priceRange[0].toLocaleString()}</span>
+            <span>&pound;{filters.priceRange[0].toLocaleString()}</span>
             <span className="text-zinc-600">to</span>
-            <span>&pound;{priceRange[1].toLocaleString()}</span>
+            <span>&pound;{filters.priceRange[1].toLocaleString()}</span>
           </div>
         </div>
 
@@ -92,11 +210,17 @@ function FilterSidebar({ className = "" }: { className?: string }) {
         <div>
           <h3 className="text-sm font-semibold text-white mb-3">Year</h3>
           <div className="grid grid-cols-2 gap-3">
-            <Select>
+            <Select
+              value={filters.yearFrom || "any"}
+              onValueChange={(val) =>
+                dispatch(setYearFrom(!val || val === "any" ? "" : val))
+              }
+            >
               <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white text-sm">
                 <SelectValue placeholder="From" />
               </SelectTrigger>
               <SelectContent className="bg-surface border-white/10">
+                <SelectItem value="any">Any</SelectItem>
                 {[2020, 2021, 2022, 2023, 2024].map((year) => (
                   <SelectItem key={year} value={year.toString()}>
                     {year}
@@ -104,11 +228,17 @@ function FilterSidebar({ className = "" }: { className?: string }) {
                 ))}
               </SelectContent>
             </Select>
-            <Select>
+            <Select
+              value={filters.yearTo || "any"}
+              onValueChange={(val) =>
+                dispatch(setYearTo(!val || val === "any" ? "" : val))
+              }
+            >
               <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white text-sm">
                 <SelectValue placeholder="To" />
               </SelectTrigger>
               <SelectContent className="bg-surface border-white/10">
+                <SelectItem value="any">Any</SelectItem>
                 {[2020, 2021, 2022, 2023, 2024].map((year) => (
                   <SelectItem key={year} value={year.toString()}>
                     {year}
@@ -123,14 +253,16 @@ function FilterSidebar({ className = "" }: { className?: string }) {
         <div>
           <h3 className="text-sm font-semibold text-white mb-3">Fuel Type</h3>
           <div className="space-y-2.5">
-            {fuelTypes.map((fuel) => (
+            {FUEL_TYPES.map((fuel) => (
               <div key={fuel} className="flex items-center gap-2.5">
                 <Checkbox
-                  id={fuel}
+                  id={`fuel-${fuel}`}
+                  checked={filters.fuelTypes.includes(fuel)}
+                  onCheckedChange={() => dispatch(toggleFuelType(fuel))}
                   className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
                 />
                 <Label
-                  htmlFor={fuel}
+                  htmlFor={`fuel-${fuel}`}
                   className="text-sm text-zinc-400 cursor-pointer"
                 >
                   {fuel}
@@ -149,11 +281,13 @@ function FilterSidebar({ className = "" }: { className?: string }) {
             {["Automatic", "Manual"].map((trans) => (
               <div key={trans} className="flex items-center gap-2.5">
                 <Checkbox
-                  id={trans}
+                  id={`trans-${trans}`}
+                  checked={filters.transmissions.includes(trans)}
+                  onCheckedChange={() => dispatch(toggleTransmission(trans))}
                   className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
                 />
                 <Label
-                  htmlFor={trans}
+                  htmlFor={`trans-${trans}`}
                   className="text-sm text-zinc-400 cursor-pointer"
                 >
                   {trans}
@@ -167,14 +301,16 @@ function FilterSidebar({ className = "" }: { className?: string }) {
         <div>
           <h3 className="text-sm font-semibold text-white mb-3">Body Type</h3>
           <div className="space-y-2.5">
-            {bodyTypes.map((type) => (
+            {BODY_TYPES.map((type) => (
               <div key={type} className="flex items-center gap-2.5">
                 <Checkbox
-                  id={type}
+                  id={`body-${type}`}
+                  checked={filters.bodyTypes.includes(type)}
+                  onCheckedChange={() => dispatch(toggleBodyType(type))}
                   className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
                 />
                 <Label
-                  htmlFor={type}
+                  htmlFor={`body-${type}`}
                   className="text-sm text-zinc-400 cursor-pointer"
                 >
                   {type}
@@ -188,8 +324,92 @@ function FilterSidebar({ className = "" }: { className?: string }) {
   );
 }
 
+// --- Main page ---
+
 export default function VehiclesPage() {
+  return (
+    <Suspense>
+      <VehiclesContent />
+    </Suspense>
+  );
+}
+
+function VehiclesContent() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const dispatch = useAppDispatch();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const filters = useAppSelector(selectFilters);
+  const vehicles = useAppSelector(selectPaginatedVehicles);
+  const currentPage = useAppSelector(selectCurrentPage);
+  const totalPages = useAppSelector(selectTotalPages);
+  const totalCount = useAppSelector(selectTotalCount);
+  const pageSize = useAppSelector(selectPageSize);
+  const status = useAppSelector(selectStatus);
+
+  // Hydrate filters from URL on mount
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (hydrated.current) return;
+    hydrated.current = true;
+
+    const parsed = searchParamsToFilters(searchParams);
+    if (Object.keys(parsed).length > 0) {
+      dispatch(setFiltersFromParams(parsed));
+    }
+  }, [searchParams, dispatch]);
+
+  // Sync redux state → URL (after hydration)
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    const params = filtersToSearchParams(filters, currentPage);
+    const qs = params.toString();
+    const target = qs ? `/vehicles?${qs}` : "/vehicles";
+    router.replace(target, { scroll: false });
+  }, [filters, currentPage, router]);
+
+  useEffect(() => {
+    if (status === "idle") {
+      dispatch(fetchVehicles());
+    }
+  }, [status, dispatch]);
+
+  const handlePageChange = useCallback(
+    (page: number) => {
+      dispatch(setPage(page));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    [dispatch],
+  );
+
+  // Pagination range
+  const pageNumbers = (() => {
+    const pages: (number | "ellipsis")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push("ellipsis");
+      for (
+        let i = Math.max(2, currentPage - 1);
+        i <= Math.min(totalPages - 1, currentPage + 1);
+        i++
+      ) {
+        pages.push(i);
+      }
+      if (currentPage < totalPages - 2) pages.push("ellipsis");
+      pages.push(totalPages);
+    }
+    return pages;
+  })();
+
+  const startItem = Math.min((currentPage - 1) * pageSize + 1, totalCount);
+  const endItem = Math.min(currentPage * pageSize, totalCount);
 
   return (
     <>
@@ -229,7 +449,10 @@ export default function VehiclesPage() {
                       Filter Vehicles
                     </span>
                   </div>
-                  <button className="text-xs text-orange hover:text-orange-light transition-colors">
+                  <button
+                    onClick={() => dispatch(resetFilters())}
+                    className="text-xs text-orange hover:text-orange-light transition-colors"
+                  >
                     Reset All
                   </button>
                 </div>
@@ -244,9 +467,9 @@ export default function VehiclesPage() {
                 <div className="flex items-center gap-4">
                   <p className="text-sm text-zinc-400">
                     <span className="text-white font-semibold">
-                      {vehicles.length}
+                      {totalCount}
                     </span>{" "}
-                    Vehicles
+                    Vehicle{totalCount !== 1 ? "s" : ""}
                   </p>
 
                   {/* Mobile Filter */}
@@ -260,9 +483,17 @@ export default function VehiclesPage() {
                       className="w-80 bg-background border-r border-white/10 overflow-y-auto"
                     >
                       <div className="pt-8 pb-4">
-                        <h2 className="text-lg font-semibold text-white mb-6">
-                          Filter Vehicles
-                        </h2>
+                        <div className="flex items-center justify-between mb-6">
+                          <h2 className="text-lg font-semibold text-white">
+                            Filter Vehicles
+                          </h2>
+                          <button
+                            onClick={() => dispatch(resetFilters())}
+                            className="text-xs text-orange hover:text-orange-light transition-colors"
+                          >
+                            Reset All
+                          </button>
+                        </div>
                         <FilterSidebar />
                       </div>
                     </SheetContent>
@@ -270,7 +501,13 @@ export default function VehiclesPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <Select defaultValue="newest">
+                  <Select
+                    value={filters.sortBy}
+                    onValueChange={(val) => {
+                      if (val)
+                        dispatch(setSortBy(val as VehicleFilters["sortBy"]));
+                    }}
+                  >
                     <SelectTrigger className="w-44 rounded-xl bg-white/5 border-white/10 text-white text-sm">
                       <SelectValue />
                     </SelectTrigger>
@@ -304,121 +541,181 @@ export default function VehiclesPage() {
               </div>
 
               {/* Vehicle Grid */}
-              <div
-                className={
-                  viewMode === "grid"
-                    ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6"
-                    : "space-y-4"
-                }
-              >
-                {vehicles.map((vehicle, i) => (
-                  <motion.div
-                    key={vehicle.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className={`group bg-surface rounded-2xl border border-white/5 overflow-hidden hover:border-orange/20 transition-all duration-500 ${
-                      viewMode === "list" ? "flex" : ""
-                    }`}
+              {vehicles.length === 0 ? (
+                <div className="text-center py-20">
+                  <p className="text-zinc-400 text-lg mb-2">
+                    No vehicles match your filters
+                  </p>
+                  <button
+                    onClick={() => dispatch(resetFilters())}
+                    className="text-orange hover:text-orange-light text-sm font-medium transition-colors"
                   >
-                    {/* Image */}
-                    <div
-                      className={`relative overflow-hidden ${viewMode === "list" ? "w-72 shrink-0" : "aspect-[16/10]"}`}
+                    Clear all filters
+                  </button>
+                </div>
+              ) : (
+                <div
+                  className={
+                    viewMode === "grid"
+                      ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6"
+                      : "space-y-4"
+                  }
+                >
+                  {vehicles.map((vehicle, i) => (
+                    <motion.div
+                      key={vehicle.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className={`group bg-surface rounded-2xl border border-white/5 overflow-hidden hover:border-orange/20 transition-all duration-500 ${
+                        viewMode === "list" ? "flex" : ""
+                      }`}
                     >
-                      <img
-                        src={vehicle.image}
-                        alt={`${vehicle.make} ${vehicle.model}`}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
-                      <button className="absolute top-3 right-3 w-9 h-9 rounded-full glass border border-white/10 flex items-center justify-center text-zinc-400 hover:text-orange hover:border-orange/30 transition-all">
-                        <Heart className="w-4 h-4" />
-                      </button>
-                      <Badge className="absolute top-3 left-3 bg-orange/90 text-white border-0 rounded-full text-xs">
-                        {vehicle.year}
-                      </Badge>
-                    </div>
+                      {/* Image */}
+                      <Link
+                        href={`/vehicles/${vehicle.id}`}
+                        className={`relative overflow-hidden block ${viewMode === "list" ? "w-72 shrink-0" : "aspect-[16/10]"}`}
+                      >
+                        <img
+                          src={vehicle.image}
+                          alt={`${vehicle.make} ${vehicle.model}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
+                        <Badge className="absolute top-3 left-3 bg-orange/90 text-white border-0 rounded-full text-xs">
+                          {vehicle.year}
+                        </Badge>
+                      </Link>
 
-                    {/* Content */}
-                    <div className="p-5 flex-1">
-                      <h3 className="font-semibold text-white text-lg">
-                        {vehicle.make} {vehicle.model}
-                      </h3>
-                      <p className="text-sm text-zinc-500 mt-0.5">
-                        {vehicle.variant}
-                      </p>
+                      {/* Content */}
+                      <div className="p-5 flex-1">
+                        <Link href={`/vehicles/${vehicle.id}`}>
+                          <h3 className="font-semibold text-white text-lg hover:text-orange transition-colors">
+                            {vehicle.make} {vehicle.model}
+                          </h3>
+                        </Link>
+                        <p className="text-sm text-zinc-500 mt-0.5">
+                          {vehicle.variant}
+                        </p>
 
-                      <div className="flex items-center gap-4 mt-3 text-xs text-zinc-400">
-                        <span className="flex items-center gap-1.5">
-                          <Fuel className="w-3.5 h-3.5" />
-                          {vehicle.fuelType}
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <Gauge className="w-3.5 h-3.5" />
-                          {vehicle.transmission}
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <Zap className="w-3.5 h-3.5" />
-                          {vehicle.horsepower} hp
-                        </span>
-                      </div>
-
-                      <p className="text-xs text-zinc-500 mt-2">
-                        {vehicle.mileage.toLocaleString()} miles
-                      </p>
-
-                      <div className="flex items-end justify-between mt-4 pt-4 border-t border-white/5">
-                        <div>
-                          <p className="text-xl font-bold text-white">
-                            &pound;{vehicle.price.toLocaleString()}
-                          </p>
-                          <p className="text-xs text-zinc-500">
-                            &pound;{vehicle.monthlyPrice}/mo*
-                          </p>
+                        <div className="flex items-center gap-4 mt-3 text-xs text-zinc-400">
+                          <span className="flex items-center gap-1.5">
+                            <Fuel className="w-3.5 h-3.5" />
+                            {vehicle.fuelType}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <Gauge className="w-3.5 h-3.5" />
+                            {vehicle.transmission}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <Zap className="w-3.5 h-3.5" />
+                            {vehicle.horsepower} hp
+                          </span>
                         </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-full border-white/10 text-white hover:bg-white/5 text-xs"
-                          >
-                            Details
-                          </Button>
-                          <Link href="/contact">
-                            <Button
-                              size="sm"
-                              className="rounded-full bg-orange hover:bg-orange-dark text-white text-xs gap-1"
-                            >
-                              Enquire
-                              <ArrowRight className="w-3 h-3" />
-                            </Button>
-                          </Link>
+
+                        <p className="text-xs text-zinc-500 mt-2">
+                          {vehicle.mileage.toLocaleString()} miles
+                        </p>
+
+                        <div className="flex items-end justify-between mt-4 pt-4 border-t border-white/5">
+                          <div>
+                            <p className="text-xl font-bold text-white">
+                              &pound;{vehicle.price.toLocaleString()}
+                            </p>
+                            <p className="text-xs text-zinc-500">
+                              &pound;{vehicle.monthlyPrice}/mo*
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Link href={`/vehicles/${vehicle.id}`}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-full border-white/10 text-white hover:bg-white/5 text-xs"
+                              >
+                                Details
+                              </Button>
+                            </Link>
+                            <Link href="/contact">
+                              <Button
+                                size="sm"
+                                className="rounded-full bg-orange hover:bg-orange-dark text-white text-xs gap-1"
+                              >
+                                Enquire
+                                <ArrowRight className="w-3 h-3" />
+                              </Button>
+                            </Link>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
 
               {/* Pagination */}
-              <div className="flex items-center justify-center gap-2 mt-12">
-                {[1, 2, 3, 4, 5].map((page) => (
-                  <button
-                    key={page}
-                    className={`w-10 h-10 rounded-xl text-sm font-medium transition-colors ${
-                      page === 1
-                        ? "bg-orange text-white"
-                        : "text-zinc-400 hover:text-white hover:bg-white/5 border border-white/10"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-                <span className="text-zinc-500 mx-2">...</span>
-                <button className="w-10 h-10 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 border border-white/10">
-                  33
-                </button>
-              </div>
+              {totalPages > 1 && (
+                <nav
+                  aria-label="Pagination"
+                  className="flex flex-col items-center gap-4 mt-12"
+                >
+                  <div className="flex items-center gap-2">
+                    {/* Previous */}
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      aria-label="Previous page"
+                      className="w-10 h-10 rounded-xl text-sm font-medium flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 hover:border-white/20"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+
+                    {/* Page numbers */}
+                    {pageNumbers.map((page, idx) =>
+                      page === "ellipsis" ? (
+                        <span
+                          key={`e-${idx}`}
+                          className="w-10 h-10 flex items-center justify-center text-zinc-500"
+                        >
+                          &hellip;
+                        </span>
+                      ) : (
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          aria-label={`Page ${page}`}
+                          aria-current={
+                            page === currentPage ? "page" : undefined
+                          }
+                          className={`w-10 h-10 rounded-xl text-sm font-medium transition-all ${
+                            page === currentPage
+                              ? "bg-orange text-white shadow-lg shadow-orange/25 scale-110 ring-2 ring-orange/30"
+                              : "text-zinc-400 hover:text-white hover:bg-white/5 border border-white/10 hover:border-white/20"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ),
+                    )}
+
+                    {/* Next */}
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      aria-label="Next page"
+                      className="w-10 h-10 rounded-xl text-sm font-medium flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 hover:border-white/20"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Page info */}
+                  <p className="text-xs text-zinc-500">
+                    Showing {startItem}&ndash;{endItem} of {totalCount} vehicles
+                    &middot; Page {currentPage} of {totalPages}
+                  </p>
+                </nav>
+              )}
             </div>
           </div>
         </div>

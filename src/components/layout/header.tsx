@@ -9,17 +9,23 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const navLinks = [
   {
-    label: "Vehicles",
+    label: "Services",
+    href: "/services",
+    children: [
+      { label: "Quality Used Car Sales", href: "/services#quality-used-cars" },
+      { label: "Imported Vehicles", href: "/services#imported-vehicles" },
+      { label: "Personalised Assistance", href: "/services#personalised-assistance" },
+    ],
+  },
+  {
+    label: "Inventory",
     href: "/vehicles",
     children: [
       { label: "All Vehicles", href: "/vehicles" },
       { label: "SUVs", href: "/vehicles?body=SUV" },
       { label: "Saloons", href: "/vehicles?body=Saloon" },
-      { label: "Electric & Hybrid", href: "/vehicles?fuel=Electric" },
     ],
   },
-  { label: "Finance", href: "/finance" },
-  { label: "Part Exchange", href: "/part-exchange" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
 ];
@@ -52,17 +58,17 @@ export function Header() {
             <div className="relative">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange to-orange-dark flex items-center justify-center">
                 <span className="text-white font-bold text-lg font-heading">
-                  M
+                  A
                 </span>
               </div>
               <div className="absolute -inset-1 rounded-xl bg-orange/20 blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <div className="hidden sm:block">
               <p className="text-lg font-bold tracking-tight text-white">
-                MVA MOTOR
+                APEX SELECT
               </p>
               <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground -mt-1">
-                Company
+                Automotive
               </p>
             </div>
           </Link>
@@ -136,8 +142,8 @@ export function Header() {
               >
                 <div className="flex flex-col h-full">
                   <div className="p-6 border-b border-white/10">
-                    <p className="text-lg font-bold text-white">MVA MOTOR</p>
-                    <p className="text-xs text-muted-foreground">Company</p>
+                    <p className="text-lg font-bold text-white">APEX SELECT</p>
+                    <p className="text-xs text-muted-foreground">Automotive</p>
                   </div>
                   <nav className="flex-1 p-4">
                     {navLinks.map((link) => (

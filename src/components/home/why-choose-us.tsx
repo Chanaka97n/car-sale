@@ -15,25 +15,25 @@ import { AnimatedCounter } from "@/components/shared/animated-counter";
 const features = [
   {
     icon: Shield,
-    title: "Carefully Curated Stock",
-    description: "Only the best quality used vehicles make it to our showroom.",
+    title: "Quality Vehicles",
+    description: "Every car is carefully selected and multi-point inspected before it reaches you.",
   },
   {
     icon: Handshake,
-    title: "Trusted & Transparent",
+    title: "Customer-Focused Service",
     description:
-      "Straightforward advice with no hidden surprises or pressure sales.",
+      "A personal, straightforward approach — no pressure, no gimmicks.",
   },
   {
     icon: Award,
-    title: "Flexible Finance",
-    description: "Competitive, tailored finance options to suit your budget.",
+    title: "A Transparent Approach",
+    description: "Honest pricing and clear information so you know exactly what you're getting.",
   },
   {
     icon: Truck,
-    title: "Nationwide Delivery",
+    title: "A Selection Worth Exploring",
     description:
-      "We deliver your vehicle anywhere in the UK straight to your door.",
+      "Quality used and imported vehicles with something to suit every need.",
   },
 ];
 
@@ -104,7 +104,7 @@ export function WhyChooseUs() {
                   transition={{ duration: 0.6, delay: 0.25 }}
                   className="text-gradient inline-block"
                 >
-                  MVA Difference
+                  Apex Select Difference
                 </motion.span>
               </h2>
               <motion.p
@@ -114,9 +114,8 @@ export function WhyChooseUs() {
                 transition={{ delay: 0.4 }}
                 className="mt-4 text-zinc-400 max-w-md leading-relaxed"
               >
-                We&apos;re not just another car dealership. We&apos;re committed
-                to providing an exceptional buying experience from start to
-                finish.
+                We believe buying a car should be an exciting experience, not
+                a stressful one. Here&apos;s what sets Apex Select apart.
               </motion.p>
             </motion.div>
 

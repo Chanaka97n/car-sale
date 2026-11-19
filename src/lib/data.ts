@@ -244,7 +244,7 @@ export const testimonials = [
     id: 1,
     name: "James Mitchell",
     role: "BMW X5 Owner",
-    text: "Exceptional service from start to finish. The team at MVA found me the perfect car within my budget. Couldn't be happier with my purchase.",
+    text: "Exceptional service from start to finish. The team at Apex Select found me the perfect car within my budget. Couldn't be happier with my purchase.",
     rating: 5,
   },
   {

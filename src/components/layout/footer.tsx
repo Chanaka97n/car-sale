@@ -13,11 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const quickLinks = [
-  { label: "Vehicles", href: "/vehicles" },
-  { label: "Finance", href: "/finance" },
-  { label: "Part Exchange", href: "/part-exchange" },
+  { label: "Services", href: "/services" },
+  { label: "Inventory", href: "/vehicles" },
   { label: "About Us", href: "/about" },
   { label: "Contact", href: "/contact" },
+  { label: "Finance", href: "/finance" },
 ];
 
 const infoLinks = [
@@ -43,7 +43,7 @@ export function Footer() {
               </h2>
               <p className="mt-2 text-zinc-400 max-w-md">
                 Browse our latest stock, book a test drive or speak to our team
-                and experience the MVA difference.
+                and discover the Apex Select difference.
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
@@ -74,12 +74,12 @@ export function Footer() {
           <div>
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange to-orange-dark flex items-center justify-center">
-                <span className="text-white font-bold text-lg">M</span>
+                <span className="text-white font-bold text-lg">A</span>
               </div>
               <div>
-                <p className="text-lg font-bold text-white">MVA MOTOR</p>
+                <p className="text-lg font-bold text-white">APEX SELECT</p>
                 <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground -mt-1">
-                  Company
+                  Automotive
                 </p>
               </div>
             </div>
@@ -87,9 +87,11 @@ export function Footer() {
               <div className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 mt-0.5 text-orange shrink-0" />
                 <span>
-                  MVA Motor Company
+                  Apex Select Automotive
                   <br />
-                  Manchester, UK
+                  10B Orchard Street
+                  <br />
+                  Weston-super-Mare, UK
                 </span>
               </div>
               <div className="flex items-center gap-3">
@@ -98,7 +100,7 @@ export function Footer() {
               </div>
               <div className="flex items-center gap-3">
                 <Mail className="w-4 h-4 text-orange shrink-0" />
-                <span>info@mvamotorcompany.co.uk</span>
+                <span>info@apexselectautomotive.co.uk</span>
               </div>
               <div className="flex items-start gap-3">
                 <Clock className="w-4 h-4 mt-0.5 text-orange shrink-0" />
@@ -153,7 +155,7 @@ export function Footer() {
           <div>
             <h3 className="font-semibold text-white mb-6">Stay Connected</h3>
             <p className="text-sm text-zinc-400 mb-4">
-              Get the latest stock, offers and insights from MVA Motor.
+              Get the latest stock, offers and insights from Apex Select.
             </p>
             <div className="flex gap-2">
               <Input
@@ -183,7 +185,7 @@ export function Footer() {
       <div className="border-t border-white/5">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
-            <p>&copy; 2024 MVA Motor Company. All rights reserved.</p>
+            <p>&copy; 2024 Apex Select Automotive. All rights reserved.</p>
             <p>FCA Authorised & Regulated</p>
           </div>
         </div>

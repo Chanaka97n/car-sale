@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { SmoothLayout } from "@/components/shared/smooth-layout";
+import { StoreProvider } from "@/redux/provider";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -43,11 +44,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} ${oswald.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <SmoothLayout>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
-        </SmoothLayout>
+        <StoreProvider>
+          <SmoothLayout>
+            <Header />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </SmoothLayout>
+        </StoreProvider>
       </body>
     </html>
   );

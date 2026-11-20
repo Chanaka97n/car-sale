@@ -170,6 +170,25 @@ const vehiclesSlice = createSlice({
       state.filters = initialFilters;
       refilter(state);
     },
+    addVehicle(state, action: PayloadAction<Omit<Vehicle, "id">>) {
+      const newVehicle: Vehicle = {
+        ...action.payload,
+        id: String(Date.now()),
+      };
+      state.allVehicles.push(newVehicle);
+      refilter(state);
+    },
+    updateVehicle(state, action: PayloadAction<Vehicle>) {
+      const idx = state.allVehicles.findIndex((v) => v.id === action.payload.id);
+      if (idx !== -1) {
+        state.allVehicles[idx] = action.payload;
+        refilter(state);
+      }
+    },
+    deleteVehicle(state, action: PayloadAction<string>) {
+      state.allVehicles = state.allVehicles.filter((v) => v.id !== action.payload);
+      refilter(state);
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -206,6 +225,9 @@ export const {
   setPage,
   setFiltersFromParams,
   resetFilters,
+  addVehicle,
+  updateVehicle,
+  deleteVehicle,
 } = vehiclesSlice.actions;
 
 export default vehiclesSlice.reducer;

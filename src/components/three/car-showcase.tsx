@@ -82,8 +82,8 @@ function OrangeAccentRing({
     <mesh ref={ref} rotation={[tiltX, 0, tiltZ]} position={[0, 0.3, 0]}>
       <torusGeometry args={[radius, thickness, 32, 128]} />
       <meshStandardMaterial
-        color="#e8590c"
-        emissive="#e8590c"
+        color="#1573DF"
+        emissive="#1573DF"
         emissiveIntensity={2}
         transparent
         opacity={opacity}
@@ -122,7 +122,7 @@ function FloatingDots() {
       </bufferGeometry>
       <pointsMaterial
         size={0.02}
-        color="#e8590c"
+        color="#1573DF"
         transparent
         opacity={0.5}
         sizeAttenuation
@@ -146,8 +146,8 @@ function HorizontalLight() {
     <mesh ref={ref} position={[0, -0.6, 0]} rotation={[-Math.PI / 2, 0, 0]}>
       <ringGeometry args={[1.5, 3.5, 64]} />
       <meshStandardMaterial
-        color="#e8590c"
-        emissive="#e8590c"
+        color="#1573DF"
+        emissive="#1573DF"
         emissiveIntensity={0.5}
         transparent
         opacity={0.15}
@@ -171,7 +171,7 @@ function MouseInteraction() {
     light.current.position.z = 3;
   });
 
-  return <pointLight ref={light} color="#f97316" intensity={2} distance={10} />;
+  return <pointLight ref={light} color="#3B8FEF" intensity={2} distance={10} />;
 }
 
 function Scene() {
@@ -195,9 +195,9 @@ function Scene() {
         angle={0.5}
         penumbra={1}
         intensity={0.3}
-        color="#e8590c"
+        color="#1573DF"
       />
-      <pointLight position={[0, 3, 0]} intensity={0.2} color="#e8590c" />
+      <pointLight position={[0, 3, 0]} intensity={0.2} color="#1573DF" />
 
       <MouseInteraction />
 

@@ -12,6 +12,9 @@ export {
   setPage,
   setFiltersFromParams,
   resetFilters,
+  addVehicle,
+  updateVehicle,
+  deleteVehicle,
 } from "./vehiclesSlice";
 export { fetchVehicles } from "./vehiclesThunks";
 export {

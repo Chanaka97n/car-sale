@@ -59,35 +59,35 @@ function Scene() {
 
       <Orb
         position={[-3, 1, -2]}
-        color="#e8590c"
+        color="#1573DF"
         size={0.8}
         speed={0.5}
         distort={0.4}
       />
       <Orb
         position={[3, -1, -3]}
-        color="#f97316"
+        color="#3B8FEF"
         size={0.6}
         speed={0.7}
         distort={0.3}
       />
       <Orb
         position={[0, 2, -4]}
-        color="#c2410c"
+        color="#0D5BBF"
         size={1}
         speed={0.3}
         distort={0.5}
       />
       <Orb
         position={[-2, -2, -2]}
-        color="#f97316"
+        color="#3B8FEF"
         size={0.4}
         speed={0.9}
         distort={0.2}
       />
       <Orb
         position={[4, 0, -5]}
-        color="#e8590c"
+        color="#1573DF"
         size={0.5}
         speed={0.6}
         distort={0.35}

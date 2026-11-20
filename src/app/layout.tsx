@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Oswald } from "next/font/google";
 import "./globals.css";
-import { Header } from "@/components/layout/header";
-import { Footer } from "@/components/layout/footer";
-import { SmoothLayout } from "@/components/shared/smooth-layout";
 import { StoreProvider } from "@/redux/provider";
 
 const inter = Inter({
@@ -45,11 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <StoreProvider>
-          <SmoothLayout>
-            <Header />
-            <main className="flex-1">{children}</main>
-            <Footer />
-          </SmoothLayout>
+          {children}
         </StoreProvider>
       </body>
     </html>

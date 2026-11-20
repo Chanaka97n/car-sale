@@ -57,8 +57,8 @@ function Needle() {
       <mesh position={[0.6, 0, 0]}>
         <boxGeometry args={[1.2, 0.03, 0.03]} />
         <meshStandardMaterial
-          color="#e8590c"
-          emissive="#e8590c"
+          color="#1573DF"
+          emissive="#1573DF"
           emissiveIntensity={2}
         />
       </mesh>
@@ -122,16 +122,16 @@ function Scene() {
     <>
       <ambientLight intensity={0.2} />
 
-      <GaugeRing radius={1.4} color="#e8590c" speed={0.3} opacity={0.3} />
-      <GaugeRing radius={1.5} color="#f97316" speed={-0.2} opacity={0.15} />
+      <GaugeRing radius={1.4} color="#1573DF" speed={0.3} opacity={0.3} />
+      <GaugeRing radius={1.5} color="#3B8FEF" speed={-0.2} opacity={0.15} />
       <TickMarks />
       <Needle />
 
       <mesh position={[0, -0.4, 0]}>
         <ringGeometry args={[0.9, 1.0, 64, 1, Math.PI * 0.25, Math.PI * 1.5]} />
         <meshStandardMaterial
-          color="#e8590c"
-          emissive="#e8590c"
+          color="#1573DF"
+          emissive="#1573DF"
           emissiveIntensity={0.5}
           transparent
           opacity={0.15}

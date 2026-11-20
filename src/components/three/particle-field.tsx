@@ -14,7 +14,7 @@ function Particles() {
     const vel = new Float32Array(count * 3);
     const col = new Float32Array(count * 3);
 
-    const orange = new THREE.Color("#e8590c");
+    const orange = new THREE.Color("#1573DF");
     const white = new THREE.Color("#ffffff");
     const dim = new THREE.Color("#333333");
 
@@ -120,7 +120,7 @@ function ConnectionLines() {
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <lineBasicMaterial
-        color="#e8590c"
+        color="#1573DF"
         transparent
         opacity={0.05}
         depthWrite={false}

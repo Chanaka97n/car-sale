@@ -6,23 +6,7 @@ import { selectUsers, addUser, updateUser, deleteUser } from "@/redux/admin/user
 import type { User } from "@/redux/admin/users/usersIndex";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { StatusBadge, getStatusVariant } from "@/components/admin/status-badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -32,15 +16,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Users, Search } from "lucide-react";
-
-type UserForm = {
-  name: string;
-  email: string;
-  role: User["role"];
-  status: User["status"];
-};
-
-const emptyForm: UserForm = { name: "", email: "", role: "staff", status: "active" };
+import { DeleteConfirmModal } from "@/components/admin/modals/delete-confirm-modal";
+import { UserFormModal, emptyUserForm, type UserForm } from "@/components/admin/modals/user-form-modal";
 
 export default function AdminUsersPage() {
   const dispatch = useAppDispatch();
@@ -50,7 +27,7 @@ export default function AdminUsersPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [form, setForm] = useState<UserForm>(emptyForm);
+  const [form, setForm] = useState<UserForm>(emptyUserForm);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
 
@@ -62,7 +39,7 @@ export default function AdminUsersPage() {
 
   const handleAdd = () => {
     dispatch(addUser(form));
-    setForm(emptyForm);
+    setForm(emptyUserForm);
     setAddOpen(false);
   };
 
@@ -71,7 +48,7 @@ export default function AdminUsersPage() {
     dispatch(updateUser({ ...editingUser, ...form }));
     setEditOpen(false);
     setEditingUser(null);
-    setForm(emptyForm);
+    setForm(emptyUserForm);
   };
 
   const handleDelete = () => {
@@ -132,7 +109,7 @@ export default function AdminUsersPage() {
             />
           </div>
           <Button
-            onClick={() => { setForm(emptyForm); setAddOpen(true); }}
+            onClick={() => { setForm(emptyUserForm); setAddOpen(true); }}
             className="btn-gradient gap-2 shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -200,122 +177,31 @@ export default function AdminUsersPage() {
         </Table>
       </div>
 
-      {/* Add User Modal */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="sm:max-w-md bg-surface border-white/10">
-          <DialogHeader>
-            <DialogTitle className="text-white">Add New User</DialogTitle>
-            <DialogDescription>Create a new user account.</DialogDescription>
-          </DialogHeader>
-          <UserFormFields form={form} setForm={setForm} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)} className="border-white/10 text-zinc-300">
-              Cancel
-            </Button>
-            <Button onClick={handleAdd} className="btn-gradient">
-              Add User
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UserFormModal
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        form={form}
+        setForm={setForm}
+        onSubmit={handleAdd}
+        mode="add"
+      />
 
-      {/* Edit User Modal */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-md bg-surface border-white/10">
-          <DialogHeader>
-            <DialogTitle className="text-white">Edit User</DialogTitle>
-            <DialogDescription>Update user details.</DialogDescription>
-          </DialogHeader>
-          <UserFormFields form={form} setForm={setForm} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)} className="border-white/10 text-zinc-300">
-              Cancel
-            </Button>
-            <Button onClick={handleEdit} className="btn-gradient">
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UserFormModal
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        form={form}
+        setForm={setForm}
+        onSubmit={handleEdit}
+        mode="edit"
+      />
 
-      {/* Delete Confirmation Modal */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-sm bg-surface border-white/10">
-          <DialogHeader>
-            <DialogTitle className="text-white">Delete User</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete <span className="text-white font-medium">{deletingUser?.name}</span>? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)} className="border-white/10 text-zinc-300">
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function UserFormFields({
-  form,
-  setForm,
-}: {
-  form: UserForm;
-  setForm: React.Dispatch<React.SetStateAction<UserForm>>;
-}) {
-  return (
-    <div className="space-y-4 py-2">
-      <div className="space-y-2">
-        <Label className="text-zinc-300">Name</Label>
-        <Input
-          placeholder="Full name"
-          value={form.name}
-          onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-          className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label className="text-zinc-300">Email</Label>
-        <Input
-          type="email"
-          placeholder="email@example.com"
-          value={form.email}
-          onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-          className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label className="text-zinc-300">Role</Label>
-          <Select value={form.role} onValueChange={(val) => val && setForm((p) => ({ ...p, role: val as User["role"] }))}>
-            <SelectTrigger className="w-full h-9 bg-white/5 border-white/10 text-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-surface border-white/10">
-              <SelectItem value="admin">Admin</SelectItem>
-              <SelectItem value="manager">Manager</SelectItem>
-              <SelectItem value="staff">Staff</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label className="text-zinc-300">Status</Label>
-          <Select value={form.status} onValueChange={(val) => val && setForm((p) => ({ ...p, status: val as User["status"] }))}>
-            <SelectTrigger className="w-full h-9 bg-white/5 border-white/10 text-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-surface border-white/10">
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <DeleteConfirmModal
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete User"
+        itemName={deletingUser?.name}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

@@ -19,7 +19,7 @@ export function SvgDivider() {
       <motion.path
         d="M0 17 L400 17 L430 4 L460 30 L490 17 L1180 17"
         fill="none"
-        stroke="#e8590c"
+        stroke="#1573DF"
         strokeWidth={2}
         initial={{ pathLength: 0 }}
         animate={isInView ? { pathLength: 1 } : { pathLength: 0 }}

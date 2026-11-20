@@ -639,7 +639,7 @@ function VehiclesContent() {
                             <Link href="/contact">
                               <Button
                                 size="sm"
-                                className="rounded-full bg-orange hover:bg-orange-dark text-white text-xs gap-1"
+                                className="rounded-full btn-gradient text-xs gap-1"
                               >
                                 Enquire
                                 <ArrowRight className="w-3 h-3" />

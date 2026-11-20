@@ -127,9 +127,9 @@ function SpotlightReveal() {
         className="absolute inset-0 pointer-events-none z-[3]"
         animate={{
           background: [
-            "radial-gradient(ellipse 60% 30% at 50% 100%, rgba(232,89,12,0.08) 0%, transparent 60%)",
-            "radial-gradient(ellipse 80% 40% at 50% 100%, rgba(232,89,12,0.14) 0%, transparent 60%)",
-            "radial-gradient(ellipse 60% 30% at 50% 100%, rgba(232,89,12,0.08) 0%, transparent 60%)",
+            "radial-gradient(ellipse 60% 30% at 50% 100%, rgba(21,115,223,0.08) 0%, transparent 60%)",
+            "radial-gradient(ellipse 80% 40% at 50% 100%, rgba(21,115,223,0.14) 0%, transparent 60%)",
+            "radial-gradient(ellipse 60% 30% at 50% 100%, rgba(21,115,223,0.08) 0%, transparent 60%)",
           ],
         }}
         transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
@@ -157,7 +157,7 @@ function VolumetricBeams() {
         className="absolute -top-[20%] -left-[10%] w-[400px] h-[150vh]"
         style={{
           background:
-            "linear-gradient(140deg, rgba(232,89,12,0.015) 0%, transparent 40%)",
+            "linear-gradient(140deg, rgba(21,115,223,0.015) 0%, transparent 40%)",
           transform: "rotate(15deg)",
         }}
         animate={{ opacity: [0.2, 0.5, 0.2] }}
@@ -192,7 +192,7 @@ function FloorReflection() {
         transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
         style={{
           background:
-            "radial-gradient(ellipse 100% 60% at 50% 100%, rgba(232,89,12,0.12) 0%, transparent 70%)",
+            "radial-gradient(ellipse 100% 60% at 50% 100%, rgba(21,115,223,0.12) 0%, transparent 70%)",
         }}
       />
       {/* Floor line — reflective edge */}
@@ -458,7 +458,7 @@ export function HeroSection() {
             className="absolute left-0 right-0 h-px pointer-events-none z-[6]"
             style={{
               background:
-                "linear-gradient(90deg, transparent 10%, rgba(232,89,12,0.12) 30%, rgba(232,89,12,0.25) 50%, rgba(232,89,12,0.12) 70%, transparent 90%)",
+                "linear-gradient(90deg, transparent 10%, rgba(21,115,223,0.12) 30%, rgba(21,115,223,0.25) 50%, rgba(21,115,223,0.12) 70%, transparent 90%)",
             }}
             animate={{ top: ["-2%", "102%"] }}
             transition={{
@@ -624,7 +624,7 @@ export function HeroSection() {
                         <Link href="/vehicles">
                           <Button
                             size="lg"
-                            className="bg-orange hover:bg-orange-dark text-white rounded-full px-8 gap-2 text-base shadow-lg shadow-orange/25 hover:shadow-orange/40 transition-all hover:scale-105 active:scale-95"
+                            className="btn-gradient rounded-full px-8 gap-2 text-base transition-all hover:scale-105 active:scale-95"
                           >
                             Explore All Vehicles
                             <ArrowRight className="w-5 h-5" />
@@ -661,7 +661,7 @@ export function HeroSection() {
                   className="absolute -inset-px rounded-2xl"
                   style={{
                     background:
-                      "linear-gradient(135deg, rgba(232,89,12,0.4) 0%, transparent 30%, transparent 70%, rgba(232,89,12,0.2) 100%)",
+                      "linear-gradient(135deg, rgba(21,115,223,0.4) 0%, transparent 30%, transparent 70%, rgba(21,115,223,0.2) 100%)",
                     opacity: 0.5,
                   }}
                 />
@@ -784,7 +784,7 @@ export function HeroSection() {
                           ? "100%"
                           : `${timerProgress * 100}%`,
                         background:
-                          "linear-gradient(90deg, #e8590c, #f97316)",
+                          "linear-gradient(90deg, #1573DF, #3B8FEF)",
                       }}
                     />
                   ) : i < currentSlide ? (

@@ -60,37 +60,37 @@
   --card-foreground: #fafafa;
   --popover: #141414;
   --popover-foreground: #fafafa;
-  --primary: #e8590c;
+  --primary: #1573DF;
   --primary-foreground: #ffffff;
   --secondary: #1a1a1a;
   --secondary-foreground: #fafafa;
   --muted: #1a1a1a;
   --muted-foreground: #a1a1aa;
-  --accent: #e8590c;
+  --accent: #1573DF;
   --accent-foreground: #ffffff;
   --destructive: #dc2626;
   --border: #262626;
   --input: #262626;
-  --ring: #e8590c;
+  --ring: #1573DF;
   --radius: 0.625rem;
-  --orange: #e8590c;
-  --orange-light: #f97316;
-  --orange-dark: #c2410c;
+  --orange: #1573DF;
+  --orange-light: #3B8FEF;
+  --orange-dark: #0D5BBF;
   --surface: #141414;
   --surface-light: #1e1e1e;
   --sidebar: #0f0f0f;
   --sidebar-foreground: #fafafa;
-  --sidebar-primary: #e8590c;
+  --sidebar-primary: #1573DF;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #1a1a1a;
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: #262626;
-  --sidebar-ring: #e8590c;
-  --chart-1: #e8590c;
-  --chart-2: #f97316;
-  --chart-3: #fb923c;
-  --chart-4: #fdba74;
-  --chart-5: #fed7aa;
+  --sidebar-ring: #1573DF;
+  --chart-1: #1573DF;
+  --chart-2: #3B8FEF;
+  --chart-3: #5BABF5;
+  --chart-4: #8DC5F9;
+  --chart-5: #BFE0FC;
 }
 
 @layer base {
@@ -107,7 +107,24 @@
 
 @layer utilities {
   .text-gradient {
-    @apply bg-gradient-to-r from-orange to-orange-light bg-clip-text text-transparent;
+    background: linear-gradient(135deg, #0A2A5E 0%, #1573DF 40%, #3B8FEF 70%, #5DA3F5 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .btn-gradient {
+    background-color: #1573DF !important;
+    color: #fff !important;
+    border-color: transparent !important;
+    box-shadow: none;
+    transition: background-color 0.2s ease;
+  }
+  .btn-gradient:hover {
+    background-color: #0D5BBF !important;
+  }
+  .btn-gradient:active {
+    background-color: #0A4DA8 !important;
   }
 
   .glass {
@@ -125,8 +142,8 @@
   }
 
   .hero-gradient {
-    background: linear-gradient(135deg, rgba(232, 89, 12, 0.15) 0%, transparent 50%),
-                linear-gradient(225deg, rgba(249, 115, 22, 0.1) 0%, transparent 50%);
+    background: linear-gradient(135deg, rgba(21, 115, 223, 0.15) 0%, transparent 50%),
+                linear-gradient(225deg, rgba(59, 143, 239, 0.1) 0%, transparent 50%);
   }
 
   .card-shine {
@@ -147,7 +164,7 @@
 }
 
 ::selection {
-  background-color: rgba(232, 89, 12, 0.3);
+  background-color: rgba(21, 115, 223, 0.3);
   color: #ffffff;
 }
 
@@ -165,5 +182,5 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #e8590c;
+  background: #1573DF;
 }

@@ -147,7 +147,7 @@ export default function ContactPage() {
               to help.
             </p>
             <div className="flex gap-4 mt-8">
-              <Button className="bg-orange hover:bg-orange-dark text-white rounded-full px-8 gap-2">
+              <Button className="btn-gradient rounded-full px-8 gap-2">
                 Book a Test Drive
                 <ArrowRight className="w-4 h-4" />
               </Button>
@@ -355,7 +355,7 @@ export default function ContactPage() {
                     </Label>
                   </div>
 
-                  <Button className="w-full bg-orange hover:bg-orange-dark text-white rounded-xl h-12 gap-2 font-semibold shadow-lg shadow-orange/20">
+                  <Button className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold">
                     <Send className="w-4 h-4" />
                     Book My Test Drive
                     <ArrowRight className="w-4 h-4" />
@@ -424,7 +424,7 @@ export default function ContactPage() {
                 </div>
               </div>
 
-              <Button className="mt-8 bg-orange hover:bg-orange-dark text-white rounded-full px-8 gap-2">
+              <Button className="mt-8 btn-gradient rounded-full px-8 gap-2">
                 Get Directions
                 <ArrowRight className="w-4 h-4" />
               </Button>

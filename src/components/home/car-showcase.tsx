@@ -117,7 +117,7 @@ export function CarShowcase() {
                 className="mt-7"
               >
                 <Link href="/about">
-                  <Button className="bg-orange hover:bg-orange-dark text-white rounded-full px-7 gap-2 shadow-lg shadow-orange/20 hover:scale-105 active:scale-95 transition-all">
+                  <Button className="btn-gradient rounded-full px-7 gap-2 hover:scale-105 active:scale-95 transition-all">
                     Our Promise
                     <ArrowRight className="w-4 h-4" />
                   </Button>

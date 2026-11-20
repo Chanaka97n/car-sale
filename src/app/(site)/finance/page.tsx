@@ -207,7 +207,7 @@ export default function FinancePage() {
                   </div>
                 </div>
 
-                <Button className="w-full bg-orange hover:bg-orange-dark text-white rounded-xl h-12 gap-2 font-semibold shadow-lg shadow-orange/20">
+                <Button className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold">
                   Apply for Finance
                   <ArrowRight className="w-4 h-4" />
                 </Button>
@@ -269,7 +269,7 @@ export default function FinancePage() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/contact">
-                <Button className="bg-orange hover:bg-orange-dark text-white rounded-full px-8 gap-2 shadow-lg shadow-orange/20">
+                <Button className="btn-gradient rounded-full px-8 gap-2">
                   Get a Finance Quote
                   <ArrowRight className="w-4 h-4" />
                 </Button>

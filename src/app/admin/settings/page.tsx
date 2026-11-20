@@ -91,7 +91,7 @@ export default function AdminSettingsPage() {
                 <Button
                   onClick={() => handleAdd(section.key)}
                   size="default"
-                  className="bg-orange hover:bg-orange-dark text-white shrink-0 gap-1.5"
+                  className="btn-gradient shrink-0 gap-1.5"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Add

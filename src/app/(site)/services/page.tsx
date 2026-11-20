@@ -137,7 +137,7 @@ export default function ServicesPage() {
                     {service.detail}
                   </p>
                   <Link href={service.href}>
-                    <Button className="bg-orange hover:bg-orange-dark text-white rounded-full px-8 gap-2">
+                    <Button className="btn-gradient rounded-full px-8 gap-2">
                       {service.cta}
                       <ArrowRight className="w-4 h-4" />
                     </Button>

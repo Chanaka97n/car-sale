@@ -115,7 +115,7 @@ export function Header() {
               <Heart className="w-5 h-5" />
             </button>
             <Link href="/contact">
-              <Button className="hidden sm:flex bg-orange hover:bg-orange-dark text-white rounded-full px-6 gap-2 shadow-lg shadow-orange/20 hover:shadow-orange/40 transition-all">
+              <Button className="hidden sm:flex btn-gradient rounded-full px-6 gap-2">
                 <Phone className="w-4 h-4" />
                 Enquire Now
               </Button>
@@ -150,7 +150,7 @@ export function Header() {
                     ))}
                   </nav>
                   <div className="p-6 border-t border-white/10">
-                    <Button className="w-full bg-orange hover:bg-orange-dark text-white rounded-full gap-2">
+                    <Button className="w-full btn-gradient rounded-full gap-2">
                       <Phone className="w-4 h-4" />
                       Enquire Now
                     </Button>

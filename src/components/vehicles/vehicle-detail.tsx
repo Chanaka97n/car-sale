@@ -344,7 +344,7 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
 
                 <div className="space-y-3">
                   <Link href="/contact" className="block">
-                    <Button className="w-full bg-orange hover:bg-orange-dark text-white rounded-xl h-12 gap-2 font-semibold shadow-lg shadow-orange/20">
+                    <Button className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold">
                       <Phone className="w-4 h-4" />
                       Enquire Now
                       <ArrowRight className="w-4 h-4" />
@@ -519,7 +519,7 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                       className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                     />
                   </div>
-                  <Button className="w-full bg-orange hover:bg-orange-dark text-white rounded-xl h-11 gap-2 font-semibold shadow-lg shadow-orange/20">
+                  <Button className="w-full btn-gradient rounded-xl h-11 gap-2 font-semibold">
                     <Mail className="w-4 h-4" />
                     Send Enquiry
                   </Button>

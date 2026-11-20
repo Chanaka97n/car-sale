@@ -202,7 +202,7 @@ export default function PartExchangePage() {
                 </div>
               </div>
 
-              <Button className="w-full bg-orange hover:bg-orange-dark text-white rounded-xl h-12 gap-2 font-semibold shadow-lg shadow-orange/20">
+              <Button className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold">
                 <ArrowLeftRight className="w-4 h-4" />
                 Get My Free Valuation
                 <ArrowRight className="w-4 h-4" />
@@ -228,7 +228,7 @@ export default function PartExchangePage() {
               current vehicle.
             </p>
             <Link href="/vehicles">
-              <Button className="bg-orange hover:bg-orange-dark text-white rounded-full px-8 gap-2 shadow-lg shadow-orange/20">
+              <Button className="btn-gradient rounded-full px-8 gap-2">
                 Browse Our Stock
                 <ArrowRight className="w-4 h-4" />
               </Button>

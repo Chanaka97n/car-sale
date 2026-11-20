@@ -133,7 +133,7 @@ export default function AdminUsersPage() {
           </div>
           <Button
             onClick={() => { setForm(emptyForm); setAddOpen(true); }}
-            className="bg-orange hover:bg-orange-dark text-white gap-2 shrink-0"
+            className="btn-gradient gap-2 shrink-0"
           >
             <Plus className="w-4 h-4" />
             Add User
@@ -212,7 +212,7 @@ export default function AdminUsersPage() {
             <Button variant="outline" onClick={() => setAddOpen(false)} className="border-white/10 text-zinc-300">
               Cancel
             </Button>
-            <Button onClick={handleAdd} className="bg-orange hover:bg-orange-dark text-white">
+            <Button onClick={handleAdd} className="btn-gradient">
               Add User
             </Button>
           </DialogFooter>
@@ -231,7 +231,7 @@ export default function AdminUsersPage() {
             <Button variant="outline" onClick={() => setEditOpen(false)} className="border-white/10 text-zinc-300">
               Cancel
             </Button>
-            <Button onClick={handleEdit} className="bg-orange hover:bg-orange-dark text-white">
+            <Button onClick={handleEdit} className="btn-gradient">
               Save Changes
             </Button>
           </DialogFooter>

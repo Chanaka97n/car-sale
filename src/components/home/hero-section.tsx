@@ -624,7 +624,7 @@ export function HeroSection() {
                         <Link href="/vehicles">
                           <Button
                             size="lg"
-                            className="bg-orange hover:bg-orange-dark text-white rounded-full px-8 gap-2 text-base shadow-lg shadow-orange/25 hover:shadow-orange/40 transition-all hover:scale-105 active:scale-95"
+                            className="btn-gradient rounded-full px-8 gap-2 text-base transition-all hover:scale-105 active:scale-95"
                           >
                             Explore All Vehicles
                             <ArrowRight className="w-5 h-5" />

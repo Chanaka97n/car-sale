@@ -48,7 +48,7 @@ export function Footer() {
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link href="/vehicles">
-                <Button className="bg-orange hover:bg-orange-dark text-white rounded-full px-8 gap-2 shadow-lg shadow-orange/20">
+                <Button className="btn-gradient rounded-full px-8 gap-2">
                   Browse Vehicles
                   <ArrowRight className="w-4 h-4" />
                 </Button>
@@ -158,7 +158,7 @@ export function Footer() {
                 placeholder="Enter your email"
                 className="rounded-full bg-white/5 border-white/10 text-white placeholder:text-zinc-500"
               />
-              <Button className="bg-orange hover:bg-orange-dark text-white rounded-full px-6 shrink-0">
+              <Button className="btn-gradient rounded-full px-6 shrink-0">
                 Subscribe
               </Button>
             </div>

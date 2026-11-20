@@ -79,7 +79,7 @@ export default function AdminLoginPage() {
           <Button
             type="submit"
             disabled={status === "loading"}
-            className="w-full h-10 bg-orange hover:bg-orange-dark text-white font-semibold"
+            className="w-full h-10 btn-gradient font-semibold"
           >
             {status === "loading" ? (
               <Loader2 className="w-4 h-4 animate-spin" />

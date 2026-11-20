@@ -114,7 +114,7 @@ export default function AdminDashboardPage() {
         </div>
         <div className="flex gap-2">
           <Link href="/admin/vehicles">
-            <Button size="default" className="bg-orange hover:bg-orange-dark text-white gap-2">
+            <Button size="default" className="btn-gradient gap-2">
               <Plus className="w-4 h-4" />
               Add Vehicle
             </Button>
@@ -287,7 +287,7 @@ export default function AdminDashboardPage() {
               <Car className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
               <p className="text-sm text-zinc-500">No vehicles in inventory</p>
               <Link href="/admin/vehicles">
-                <Button size="default" className="mt-3 bg-orange hover:bg-orange-dark text-white gap-2">
+                <Button size="default" className="mt-3 btn-gradient gap-2">
                   <Plus className="w-4 h-4" />
                   Add First Vehicle
                 </Button>

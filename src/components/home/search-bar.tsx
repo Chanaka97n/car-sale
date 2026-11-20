@@ -81,7 +81,7 @@ export function SearchBar() {
               </SelectContent>
             </Select>
 
-            <Button className="bg-orange hover:bg-orange-dark text-white rounded-xl h-12 gap-2 font-semibold shadow-lg shadow-orange/20">
+            <Button className="btn-gradient rounded-xl h-12 gap-2 font-semibold">
               <Search className="w-5 h-5" />
               Search
             </Button>

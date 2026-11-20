@@ -107,7 +107,24 @@
 
 @layer utilities {
   .text-gradient {
-    @apply bg-gradient-to-r from-orange to-orange-light bg-clip-text text-transparent;
+    background: linear-gradient(135deg, #0A2A5E 0%, #1573DF 40%, #3B8FEF 70%, #5DA3F5 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .btn-gradient {
+    background-color: #1573DF !important;
+    color: #fff !important;
+    border-color: transparent !important;
+    box-shadow: none;
+    transition: background-color 0.2s ease;
+  }
+  .btn-gradient:hover {
+    background-color: #0D5BBF !important;
+  }
+  .btn-gradient:active {
+    background-color: #0A4DA8 !important;
   }
 
   .glass {

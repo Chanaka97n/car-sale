@@ -109,7 +109,7 @@ export default function AboutPage() {
                 </p>
               </div>
               <Link href="/vehicles" className="inline-block mt-8">
-                <Button className="bg-orange hover:bg-orange-dark text-white rounded-full px-8 gap-2">
+                <Button className="btn-gradient rounded-full px-8 gap-2">
                   Browse Our Stock
                   <ArrowRight className="w-4 h-4" />
                 </Button>

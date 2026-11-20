@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
-import { selectUsers, addUser, updateUser, deleteUser } from "@/redux/users/usersIndex";
-import type { User } from "@/redux/users/usersIndex";
+import { selectUsers, addUser, updateUser, deleteUser } from "@/redux/admin/users/usersIndex";
+import type { User } from "@/redux/admin/users/usersIndex";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
-import { selectUser, logout } from "@/redux/auth/authIndex";
+import { selectUser, logout } from "@/redux/admin/auth/authIndex";
 import {
   LayoutDashboard,
   Users,

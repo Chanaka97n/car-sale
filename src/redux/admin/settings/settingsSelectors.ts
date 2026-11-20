@@ -1,4 +1,4 @@
-import type { RootState } from "../store";
+import type { RootState } from "../../store";
 
 export const selectSettings = (state: RootState) => state.settings;
 export const selectMakes = (state: RootState) => state.settings.makes;

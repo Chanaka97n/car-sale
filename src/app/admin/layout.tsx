@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAppSelector } from "@/redux/hooks";
-import { selectIsAuthenticated } from "@/redux/auth/authIndex";
+import { selectIsAuthenticated } from "@/redux/admin/auth/authIndex";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

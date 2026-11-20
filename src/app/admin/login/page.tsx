@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
-import { login, selectIsAuthenticated, selectAuthStatus, selectAuthError } from "@/redux/auth/authIndex";
+import { login, selectIsAuthenticated, selectAuthStatus, selectAuthError } from "@/redux/admin/auth/authIndex";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

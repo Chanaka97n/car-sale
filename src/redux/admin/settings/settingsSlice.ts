@@ -1,5 +1,5 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import { MAKES, BODY_TYPES, FUEL_TYPES } from "../vehicles/vehiclesTypes";
+import { MAKES, BODY_TYPES, FUEL_TYPES } from "../../vehicles/vehiclesTypes";
 
 const STORAGE_KEY = "apex_admin_settings";
 

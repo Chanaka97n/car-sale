@@ -1,8 +1,8 @@
 "use client";
 
 import { useAppSelector } from "@/redux/hooks";
-import { selectUser } from "@/redux/auth/authIndex";
-import { selectUsers } from "@/redux/users/usersIndex";
+import { selectUser } from "@/redux/admin/auth/authIndex";
+import { selectUsers } from "@/redux/admin/users/usersIndex";
 import Link from "next/link";
 import {
   Car,

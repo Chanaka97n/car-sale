@@ -1,7 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { SoldOutOverlay } from "@/components/vehicles/sold-out-stamp";
+import {
+  defaultIntentFor,
+  ENQUIRY_PARAM,
+  enquiryMessage,
+  parseEnquiryIntent,
+  type EnquiryIntent,
+} from "@/lib/enquiry-intent";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAppDispatch } from "@/redux/hooks";
+import { addEnquiry } from "@/redux/admin/enquiries/enquiriesIndex";
 import {
   ArrowLeft,
   ArrowRight,
@@ -25,23 +35,119 @@ import {
   Clock,
   Leaf,
   FileText,
+  MapPin,
+  Download,
+  Play,
+  Tag,
+  Hash,
+  Settings,
+  Droplets,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
+import { vehiclePath } from "@/lib/vehicle-url";
 import type { Vehicle } from "@/lib/data";
+import type { AppDispatch } from "@/redux/store";
+import { Controller, useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { FieldError, FormError, fieldAria } from "@/components/forms/form-errors";
+import {
+  testDriveDefaults,
+  testDriveSchema,
+  todayIso,
+  vehicleEnquiryDefaults,
+  vehicleEnquirySchema,
+  type TestDriveValues,
+  type VehicleEnquiryValues,
+} from "@/lib/validation";
 
 interface VehicleDetailProps {
   vehicle: Vehicle;
   related: Vehicle[];
 }
 
+type InfoTab = "overview" | "features" | "specs" | "general" | "location";
+
+/** An enquiry request to apply; `seq` changes so repeating the same intent re-applies it. */
+interface IntentRequest {
+  type: EnquiryIntent;
+  seq: number;
+}
+
+/**
+ * Reads `?enquire=` from the URL (set by "Enquire" links on the listing / home page)
+ * once the page is in the browser. Deliberately reads `window.location` in an effect
+ * rather than `useSearchParams()`: that hook makes the prerender bail out to
+ * client rendering, which would drop the vehicle content (and its JSON-LD) from the
+ * server HTML that search engines index. Re-runs when navigating to another vehicle.
+ */
+function EnquiryIntentListener({
+  vehicleId,
+  onIntent,
+}: {
+  vehicleId: string;
+  onIntent: (intent: EnquiryIntent) => void;
+}) {
+  useEffect(() => {
+    const intent = parseEnquiryIntent(
+      new URLSearchParams(window.location.search).get(ENQUIRY_PARAM),
+    );
+    if (intent) onIntent(intent);
+  }, [vehicleId, onIntent]);
+  return null;
+}
+
+/** Keep `?enquire=` in the address bar in sync without a router navigation. */
+function setEnquiryParam(intent: EnquiryIntent | null) {
+  const url = new URL(window.location.href);
+  if (intent) url.searchParams.set(ENQUIRY_PARAM, intent);
+  else url.searchParams.delete(ENQUIRY_PARAM);
+  if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url);
+}
+
 export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
+  const dispatch = useAppDispatch();
   const [selectedImage, setSelectedImage] = useState(0);
   const [showFullscreen, setShowFullscreen] = useState(false);
+  const [activeTab, setActiveTab] = useState<InfoTab>("overview");
+  const [showTestDrive, setShowTestDrive] = useState(false);
+  const [intent, setIntent] = useState<IntentRequest | null>(null);
+
+  /** Apply an enquiry intent: test-drive opens the modal, others pre-fill the sidebar form. */
+  const applyIntent = useCallback((type: EnquiryIntent) => {
+    setIntent((prev) => ({ type, seq: (prev?.seq ?? 0) + 1 }));
+    if (type === "test-drive") setShowTestDrive(true);
+  }, []);
+
+  /** From an in-page button: same behaviour as arriving via an "Enquire" link. */
+  const requestEnquiry = (type: EnquiryIntent) => {
+    setEnquiryParam(type);
+    applyIntent(type);
+  };
+
+  const handleTestDriveOpenChange = (open: boolean) => {
+    setShowTestDrive(open);
+    if (!open && intent?.type === "test-drive") setEnquiryParam(null);
+  };
 
   const images = vehicle.images || [vehicle.image];
 
@@ -57,10 +163,31 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
     { icon: Zap, label: "Power", value: `${vehicle.horsepower} hp` },
     { icon: Car, label: "Body Type", value: vehicle.bodyType },
     ...(vehicle.engineSize
-      ? [{ icon: Activity, label: "Engine", value: vehicle.engineSize }]
+      ? [{ icon: Settings, label: "Engine", value: vehicle.engineSize }]
       : []),
     ...(vehicle.drivetrain
       ? [{ icon: Car, label: "Drivetrain", value: vehicle.drivetrain }]
+      : []),
+    ...(vehicle.trim
+      ? [{ icon: Tag, label: "Trim", value: vehicle.trim }]
+      : []),
+    ...(vehicle.condition
+      ? [{ icon: Shield, label: "Condition", value: vehicle.condition }]
+      : []),
+    ...(vehicle.stockNumber
+      ? [{ icon: Hash, label: "Stock No.", value: vehicle.stockNumber }]
+      : []),
+    ...(vehicle.vinNumber
+      ? [{ icon: FileText, label: "VIN", value: vehicle.vinNumber }]
+      : []),
+    ...(vehicle.exteriorColor
+      ? [{ icon: Palette, label: "Exterior Color", value: vehicle.exteriorColor }]
+      : []),
+    ...(vehicle.interiorColor
+      ? [{ icon: Palette, label: "Interior Color", value: vehicle.interiorColor }]
+      : []),
+    ...(vehicle.fuelEconomy
+      ? [{ icon: Droplets, label: "Fuel Economy", value: vehicle.fuelEconomy }]
       : []),
     ...(vehicle.doors
       ? [{ icon: Car, label: "Doors", value: vehicle.doors.toString() }]
@@ -116,6 +243,48 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
     setSelectedImage((prev) => (prev + 1) % images.length);
   const prevImage = () =>
     setSelectedImage((prev) => (prev - 1 + images.length) % images.length);
+
+  const hasTabContent =
+    vehicle.vehicleOverview ||
+    vehicle.description ||
+    vehicle.featuresAndOptions ||
+    (vehicle.features && vehicle.features.length > 0) ||
+    vehicle.technicalSpecs ||
+    vehicle.generalInfo ||
+    vehicle.vehicleLocation;
+
+  const infoTabs: { id: InfoTab; label: string; hasContent: boolean }[] = [
+    {
+      id: "overview",
+      label: "Vehicle Overview",
+      hasContent: !!(vehicle.vehicleOverview || vehicle.description),
+    },
+    {
+      id: "features",
+      label: "Features & Options",
+      hasContent: !!(
+        vehicle.featuresAndOptions ||
+        (vehicle.features && vehicle.features.length > 0)
+      ),
+    },
+    {
+      id: "specs",
+      label: "Technical Specifications",
+      hasContent: !!vehicle.technicalSpecs,
+    },
+    {
+      id: "general",
+      label: "General Information",
+      hasContent: !!vehicle.generalInfo,
+    },
+    {
+      id: "location",
+      label: "Vehicle Location",
+      hasContent: !!vehicle.vehicleLocation,
+    },
+  ];
+
+  const visibleTabs = infoTabs.filter((t) => t.hasContent);
 
   return (
     <>
@@ -226,6 +395,8 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                   <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-80 transition-opacity" />
                 </div>
 
+                <SoldOutOverlay sold={vehicle.vehicleStatus === "sold"} size="lg" />
+
                 {images.length > 1 && (
                   <>
                     <button
@@ -289,14 +460,34 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                 <div>
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <Badge className="bg-orange/15 text-orange border-orange/20 rounded-full mb-3">
-                        {vehicle.year} · {vehicle.mileage.toLocaleString()}{" "}
-                        miles
-                      </Badge>
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        <Badge className="bg-orange/15 text-orange border-orange/20 rounded-full">
+                          {vehicle.year} · {vehicle.mileage.toLocaleString()}{" "}
+                          miles
+                        </Badge>
+                        {vehicle.condition && (
+                          <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/20 rounded-full">
+                            {vehicle.condition}
+                          </Badge>
+                        )}
+                        {vehicle.vehicleStatus === "sold" && (
+                          <Badge className="bg-red-500/15 text-red-400 border-red-500/20 rounded-full">
+                            Sold Out
+                          </Badge>
+                        )}
+                      </div>
                       <h1 className="text-2xl sm:text-3xl font-bold text-white">
                         {vehicle.make} {vehicle.model}
                       </h1>
-                      <p className="text-zinc-400 mt-1">{vehicle.variant}</p>
+                      <p className="text-zinc-400 mt-1">
+                        {vehicle.variant}
+                        {vehicle.trim && ` · ${vehicle.trim}`}
+                      </p>
+                      {vehicle.stockNumber && (
+                        <p className="text-xs text-zinc-500 mt-1">
+                          Stock #: {vehicle.stockNumber}
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <button className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-zinc-400 hover:text-orange hover:border-orange/30 transition-all">
@@ -309,16 +500,34 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                   </div>
 
                   <div className="mt-5">
-                    <p className="text-3xl sm:text-4xl font-bold text-white">
-                      &pound;{vehicle.price.toLocaleString()}
-                    </p>
-                    <p className="text-sm text-zinc-500 mt-1">
-                      Finance from{" "}
-                      <span className="text-orange font-medium">
-                        &pound;{vehicle.monthlyPrice.toLocaleString()}/mo
-                      </span>
-                      *
-                    </p>
+                    {vehicle.salePrice ? (
+                      <div className="flex items-baseline gap-3">
+                        <p className="text-3xl sm:text-4xl font-bold text-white">
+                          &pound;{vehicle.salePrice.toLocaleString()}
+                        </p>
+                        <p className="text-lg text-zinc-500 line-through">
+                          &pound;{vehicle.price.toLocaleString()}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-3xl sm:text-4xl font-bold text-white">
+                        &pound;{vehicle.price.toLocaleString()}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-3 mt-1">
+                      <p className="text-sm text-zinc-500">
+                        Finance from{" "}
+                        <span className="text-orange font-medium">
+                          &pound;{vehicle.monthlyPrice.toLocaleString()}/mo
+                        </span>
+                        *
+                      </p>
+                      {vehicle.taxLabel && (
+                        <span className="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                          {vehicle.taxLabel}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -342,24 +551,45 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                   ))}
                 </div>
 
+                {/* Quick color info */}
+                {(vehicle.exteriorColor || vehicle.interiorColor) && (
+                  <div className="flex items-center gap-4 text-sm">
+                    {vehicle.exteriorColor && (
+                      <div className="flex items-center gap-2 text-zinc-400">
+                        <Palette className="w-3.5 h-3.5 text-zinc-500" />
+                        <span>Ext: <span className="text-zinc-300">{vehicle.exteriorColor}</span></span>
+                      </div>
+                    )}
+                    {vehicle.interiorColor && (
+                      <div className="flex items-center gap-2 text-zinc-400">
+                        <Palette className="w-3.5 h-3.5 text-zinc-500" />
+                        <span>Int: <span className="text-zinc-300">{vehicle.interiorColor}</span></span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-3">
-                  <Link href="/contact" className="block">
-                    <Button className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold">
+                  {vehicle.vehicleStatus !== "sold" && (
+                    <Button
+                      type="button"
+                      onClick={() => requestEnquiry(defaultIntentFor(vehicle))}
+                      className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold"
+                    >
                       <Phone className="w-4 h-4" />
-                      Enquire Now
+                      {vehicle.enableRequestPrice ? "Request Price" : "Enquire Now"}
                       <ArrowRight className="w-4 h-4" />
                     </Button>
-                  </Link>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
-                    <Link href="/contact">
-                      <Button
-                        variant="outline"
-                        className="w-full rounded-xl border-white/10 text-white hover:bg-white/5 gap-2 h-11"
-                      >
-                        <Calendar className="w-4 h-4" />
-                        Test Drive
-                      </Button>
-                    </Link>
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-xl border-white/10 text-white hover:bg-white/5 gap-2 h-11"
+                      onClick={() => requestEnquiry("test-drive")}
+                    >
+                      <Calendar className="w-4 h-4" />
+                      Test Drive
+                    </Button>
                     <Link href="/finance">
                       <Button
                         variant="outline"
@@ -370,6 +600,22 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                       </Button>
                     </Link>
                   </div>
+                  {vehicle.brochureUrl && (
+                    <a
+                      href={vehicle.brochureUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-xl border-white/10 text-white hover:bg-white/5 gap-2 h-11"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download Brochure
+                      </Button>
+                    </a>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-4 py-3 px-4 bg-surface rounded-xl border border-white/5">
@@ -388,27 +634,132 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
         </div>
       </section>
 
+      {/* Video Section */}
+      {vehicle.videoUrl && (
+        <section className="pb-12">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="lg:max-w-[60%]">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+              >
+                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                  <div className="w-1 h-5 rounded-full bg-orange" />
+                  Video
+                </h2>
+                <VideoEmbed url={vehicle.videoUrl} title={`${vehicle.make} ${vehicle.model}`} />
+              </motion.div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Detailed Info */}
       <section className="pb-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-5 gap-8">
             <div className="lg:col-span-3 space-y-10">
-              {vehicle.description && (
+              {/* Tabbed content sections */}
+              {hasTabContent && visibleTabs.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                 >
-                  <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                    <div className="w-1 h-5 rounded-full bg-orange" />
-                    About This Vehicle
-                  </h2>
-                  <p className="text-zinc-400 leading-relaxed">
-                    {vehicle.description}
-                  </p>
+                  <div className="flex gap-1 border-b border-white/10 mb-6 overflow-x-auto">
+                    {visibleTabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
+                          activeTab === tab.id
+                            ? "text-orange border-orange"
+                            : "text-zinc-500 border-transparent hover:text-zinc-300"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={activeTab}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      {activeTab === "overview" && (
+                        <div className="space-y-4">
+                          {vehicle.vehicleOverview && (
+                            <div className="text-zinc-400 leading-relaxed whitespace-pre-line">
+                              {vehicle.vehicleOverview}
+                            </div>
+                          )}
+                          {vehicle.description &&
+                            vehicle.description !== vehicle.vehicleOverview && (
+                              <div className="text-zinc-400 leading-relaxed whitespace-pre-line">
+                                {vehicle.description}
+                              </div>
+                            )}
+                        </div>
+                      )}
+
+                      {activeTab === "features" && (
+                        <div className="space-y-4">
+                          {vehicle.featuresAndOptions && (
+                            <div className="text-zinc-400 leading-relaxed whitespace-pre-line">
+                              {vehicle.featuresAndOptions}
+                            </div>
+                          )}
+                          {vehicle.features && vehicle.features.length > 0 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {vehicle.features.map((feature) => (
+                                <div
+                                  key={feature}
+                                  className="flex items-center gap-2.5 py-2 px-3 rounded-lg bg-surface border border-white/5"
+                                >
+                                  <CheckCircle2 className="w-4 h-4 text-orange shrink-0" />
+                                  <span className="text-sm text-zinc-300">
+                                    {feature}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {activeTab === "specs" && vehicle.technicalSpecs && (
+                        <div className="text-zinc-400 leading-relaxed whitespace-pre-line">
+                          {vehicle.technicalSpecs}
+                        </div>
+                      )}
+
+                      {activeTab === "general" && vehicle.generalInfo && (
+                        <div className="text-zinc-400 leading-relaxed whitespace-pre-line">
+                          {vehicle.generalInfo}
+                        </div>
+                      )}
+
+                      {activeTab === "location" && vehicle.vehicleLocation && (
+                        <div className="space-y-3">
+                          <div className="flex items-start gap-2 text-zinc-400">
+                            <MapPin className="w-4 h-4 text-orange mt-0.5 shrink-0" />
+                            <div className="leading-relaxed whitespace-pre-line">
+                              {vehicle.vehicleLocation}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
                 </motion.div>
               )}
 
+              {/* Specifications grid */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -437,32 +788,6 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                   ))}
                 </div>
               </motion.div>
-
-              {vehicle.features && vehicle.features.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                >
-                  <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                    <div className="w-1 h-5 rounded-full bg-orange" />
-                    Features & Equipment
-                  </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {vehicle.features.map((feature) => (
-                      <div
-                        key={feature}
-                        className="flex items-center gap-2.5 py-2 px-3 rounded-lg bg-surface border border-white/5"
-                      >
-                        <CheckCircle2 className="w-4 h-4 text-orange shrink-0" />
-                        <span className="text-sm text-zinc-300">
-                          {feature}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
             </div>
 
             {/* Sidebar — Enquiry Form */}
@@ -472,71 +797,7 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
               viewport={{ once: true }}
               className="lg:col-span-2"
             >
-              <div className="sticky top-28 bg-surface rounded-2xl border border-white/5 p-6">
-                <h3 className="font-semibold text-white mb-1">
-                  Interested in this vehicle?
-                </h3>
-                <p className="text-xs text-zinc-500 mb-5">
-                  Fill in your details and we&apos;ll get back to you.
-                </p>
-
-                <form className="space-y-4">
-                  <div>
-                    <Label className="text-xs text-zinc-400 mb-1 block">
-                      Full Name *
-                    </Label>
-                    <Input
-                      placeholder="Your name"
-                      className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-zinc-400 mb-1 block">
-                      Email *
-                    </Label>
-                    <Input
-                      type="email"
-                      placeholder="Your email"
-                      className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-zinc-400 mb-1 block">
-                      Phone *
-                    </Label>
-                    <Input
-                      type="tel"
-                      placeholder="Your phone"
-                      className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-zinc-400 mb-1 block">
-                      Message
-                    </Label>
-                    <Input
-                      placeholder={`I'm interested in the ${vehicle.year} ${vehicle.make} ${vehicle.model}...`}
-                      className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-                    />
-                  </div>
-                  <Button className="w-full btn-gradient rounded-xl h-11 gap-2 font-semibold">
-                    <Mail className="w-4 h-4" />
-                    Send Enquiry
-                  </Button>
-                </form>
-
-                <div className="mt-5 pt-5 border-t border-white/5 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center">
-                    <Phone className="w-4 h-4 text-orange" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-zinc-500">Prefer to call?</p>
-                    <p className="text-sm text-white font-medium">
-                      +44 (0)161 XXX XXXX
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <EnquiryForm vehicle={vehicle} dispatch={dispatch} intent={intent} />
             </motion.div>
           </div>
         </div>
@@ -581,7 +842,7 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                   transition={{ delay: i * 0.1 }}
                 >
                   <Link
-                    href={`/vehicles/${v.id}`}
+                    href={vehiclePath(v)}
                     className="group block bg-surface rounded-2xl border border-white/5 overflow-hidden hover:border-orange/20 transition-all duration-500"
                   >
                     <div className="relative aspect-[16/10] overflow-hidden">
@@ -591,7 +852,8 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
-                      <Badge className="absolute top-3 left-3 bg-orange/90 text-white border-0 rounded-full text-xs">
+                      <SoldOutOverlay sold={v.vehicleStatus === "sold"} size="sm" />
+                      <Badge className="absolute top-3 left-3 z-20 bg-orange/90 text-white border-0 rounded-full text-xs">
                         {v.year}
                       </Badge>
                     </div>
@@ -620,7 +882,7 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                         </div>
                         <span className="text-xs text-orange font-medium flex items-center gap-1 group-hover:gap-2 transition-all">
                           View Details
-                          <ArrowRight className="w-3.5 h-3.5" />
+                          <ArrowRight className="w-4 h-4" />
                         </span>
                       </div>
                     </div>
@@ -631,6 +893,536 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
           </div>
         </section>
       )}
+
+      <TestDriveModal
+        open={showTestDrive}
+        onOpenChange={handleTestDriveOpenChange}
+        vehicle={vehicle}
+        dispatch={dispatch}
+      />
+
+      <EnquiryIntentListener vehicleId={vehicle.id} onIntent={applyIntent} />
     </>
+  );
+}
+
+function VideoEmbed({ url, title }: { url: string; title: string }) {
+  const embedUrl = getEmbedUrl(url);
+
+  if (!embedUrl) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-3 p-4 bg-surface rounded-xl border border-white/5 hover:border-orange/20 transition-colors"
+      >
+        <div className="w-12 h-12 rounded-full bg-orange/10 flex items-center justify-center">
+          <Play className="w-5 h-5 text-orange" />
+        </div>
+        <div>
+          <p className="text-sm text-white font-medium">Watch Video</p>
+          <p className="text-xs text-zinc-500 truncate max-w-xs">{url}</p>
+        </div>
+      </a>
+    );
+  }
+
+  return (
+    <div className="aspect-video rounded-xl overflow-hidden border border-white/5 bg-surface">
+      <iframe
+        src={embedUrl}
+        title={title}
+        className="w-full h-full"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    </div>
+  );
+}
+
+function getEmbedUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+
+    if (u.hostname.includes("youtube.com") || u.hostname.includes("youtu.be")) {
+      let videoId: string | null = null;
+      if (u.hostname.includes("youtu.be")) {
+        videoId = u.pathname.slice(1);
+      } else {
+        videoId = u.searchParams.get("v");
+      }
+      if (videoId) return `https://www.youtube.com/embed/${videoId}`;
+    }
+
+    if (u.hostname.includes("vimeo.com")) {
+      const match = u.pathname.match(/\/(\d+)/);
+      if (match) return `https://player.vimeo.com/video/${match[1]}`;
+    }
+  } catch {
+    // invalid URL
+  }
+  return null;
+}
+
+function EnquiryForm({
+  vehicle,
+  dispatch,
+  intent,
+}: {
+  vehicle: Vehicle;
+  dispatch: AppDispatch;
+  /** Set when the visitor arrived via an "Enquire" link (or clicked Enquire on this page). */
+  intent: IntentRequest | null;
+}) {
+  const [submitted, setSubmitted] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    setValue,
+    setFocus,
+    getFieldState,
+    formState: { errors, isSubmitting },
+  } = useForm<VehicleEnquiryValues>({
+    resolver: yupResolver(vehicleEnquirySchema),
+    defaultValues: vehicleEnquiryDefaults,
+    mode: "onTouched",
+  });
+
+  // ?enquire=vehicle|price → pre-fill the message for this ad, bring the form into
+  // view and focus the first field. Never overwrites a message the visitor typed.
+  const formIntent = intent && intent.type !== "test-drive" ? intent : null;
+  useEffect(() => {
+    if (!formIntent) return;
+    if (!getFieldState("message").isDirty) {
+      setValue("message", enquiryMessage(vehicle, formIntent.type));
+    }
+    containerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(() => {
+      try {
+        setFocus("name", { shouldSelect: false });
+      } catch {}
+    }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run per request (seq), not per vehicle object identity
+  }, [formIntent?.seq]);
+
+  const isPriceRequest = formIntent?.type === "price";
+
+  const onSubmit = handleSubmit(async (values) => {
+    const [firstName, ...rest] = values.name.trim().split(/\s+/);
+    try {
+      await dispatch(
+        addEnquiry({
+          type: "vehicle",
+          firstName,
+          lastName: rest.join(" "),
+          email: values.email,
+          phone: values.phone,
+          message:
+            values.message ||
+            `I'm interested in the ${vehicle.year} ${vehicle.make} ${vehicle.model}.`,
+          vehicleId: vehicle.id,
+          vehicleLabel: `${vehicle.make} ${vehicle.model} ${vehicle.variant}`,
+          marketingConsent: false,
+        }),
+      ).unwrap();
+      setSubmitted(true);
+      reset(vehicleEnquiryDefaults);
+    } catch (message) {
+      setError("root.server", { message: String(message) });
+    }
+  });
+
+  return (
+    <div
+      ref={containerRef}
+      id="enquire"
+      className="sticky top-28 bg-surface rounded-2xl border border-white/5 p-6 scroll-mt-28"
+    >
+      {submitted ? (
+        <div className="text-center py-6">
+          <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 className="w-7 h-7 text-emerald-400" />
+          </div>
+          <h3 className="font-semibold text-white mb-1">Enquiry Sent!</h3>
+          <p className="text-xs text-zinc-400">
+            Thank you for your interest. We&apos;ll get back to you shortly.
+          </p>
+          <Button
+            className="mt-4 btn-gradient rounded-xl"
+            onClick={() => setSubmitted(false)}
+          >
+            Send Another Enquiry
+          </Button>
+        </div>
+      ) : (
+        <>
+          <h3 className="font-semibold text-white mb-1">
+            {isPriceRequest ? "Request the price" : "Interested in this vehicle?"}
+          </h3>
+          <p className="text-xs text-zinc-500 mb-5">
+            {isPriceRequest
+              ? "Leave your details and we'll send you our best price."
+              : "Fill in your details and we'll get back to you."}
+          </p>
+
+          <form className="space-y-4" onSubmit={onSubmit} noValidate>
+            <div>
+              <Label htmlFor="enq-name" className="text-xs text-zinc-400 mb-1 block">
+                Full Name *
+              </Label>
+              <Input
+                id="enq-name"
+                autoComplete="name"
+                placeholder="Your name"
+                {...register("name")}
+                {...fieldAria("enq-name", errors.name?.message)}
+                className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
+              />
+              <FieldError id="enq-name-error" message={errors.name?.message} />
+            </div>
+            <div>
+              <Label htmlFor="enq-email" className="text-xs text-zinc-400 mb-1 block">
+                Email *
+              </Label>
+              <Input
+                id="enq-email"
+                type="email"
+                autoComplete="email"
+                placeholder="Your email"
+                {...register("email")}
+                {...fieldAria("enq-email", errors.email?.message)}
+                className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
+              />
+              <FieldError id="enq-email-error" message={errors.email?.message} />
+            </div>
+            <div>
+              <Label htmlFor="enq-phone" className="text-xs text-zinc-400 mb-1 block">
+                Phone *
+              </Label>
+              <Input
+                id="enq-phone"
+                type="tel"
+                autoComplete="tel"
+                placeholder="Your phone"
+                {...register("phone")}
+                {...fieldAria("enq-phone", errors.phone?.message)}
+                className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
+              />
+              <FieldError id="enq-phone-error" message={errors.phone?.message} />
+            </div>
+            <div>
+              <Label htmlFor="enq-message" className="text-xs text-zinc-400 mb-1 block">
+                Message
+              </Label>
+              <textarea
+                id="enq-message"
+                rows={3}
+                placeholder={`I'm interested in the ${vehicle.year} ${vehicle.make} ${vehicle.model}...`}
+                {...register("message")}
+                {...fieldAria("enq-message", errors.message?.message)}
+                className="w-full rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-zinc-600 px-3 py-2 text-sm resize-y focus:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-red-500/60"
+              />
+              <FieldError id="enq-message-error" message={errors.message?.message} />
+            </div>
+            <FormError message={errors.root?.server?.message} />
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full btn-gradient rounded-xl h-11 gap-2 font-semibold"
+            >
+              <Mail className="w-4 h-4" />
+              {isSubmitting ? "Sending…" : "Send Enquiry"}
+            </Button>
+          </form>
+        </>
+      )}
+
+      <div className="mt-5 pt-5 border-t border-white/5 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-orange/10 flex items-center justify-center">
+          <Phone className="w-4 h-4 text-orange" />
+        </div>
+        <div>
+          <p className="text-xs text-zinc-500">Prefer to call?</p>
+          <p className="text-sm text-white font-medium">
+            +44 (0)161 XXX XXXX
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const TIME_SLOTS = [
+  "9:00 AM",
+  "10:00 AM",
+  "11:00 AM",
+  "12:00 PM",
+  "1:00 PM",
+  "2:00 PM",
+  "3:00 PM",
+  "4:00 PM",
+  "5:00 PM",
+];
+
+function TestDriveModal({
+  open,
+  onOpenChange,
+  vehicle,
+  dispatch,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  vehicle: Vehicle;
+  dispatch: AppDispatch;
+}) {
+  const [submitted, setSubmitted] = useState(false);
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    setError,
+    setValue,
+    getFieldState,
+    formState: { errors, isSubmitting },
+  } = useForm<TestDriveValues>({
+    resolver: yupResolver(testDriveSchema),
+    defaultValues: testDriveDefaults,
+    mode: "onTouched",
+  });
+
+  // Opening the modal (button or ?enquire=test-drive) pre-fills a message for this ad,
+  // unless the visitor already wrote their own.
+  useEffect(() => {
+    if (open && !getFieldState("message").isDirty) {
+      setValue("message", enquiryMessage(vehicle, "test-drive"));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the modal opens
+  }, [open]);
+
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      await dispatch(
+        addEnquiry({
+          type: "test-drive",
+          firstName: values.firstName,
+          lastName: values.lastName,
+          email: values.email,
+          phone: values.phone,
+          message:
+            values.message ||
+            `I'd like to book a test drive for the ${vehicle.year} ${vehicle.make} ${vehicle.model}.`,
+          vehicleId: vehicle.id,
+          vehicleLabel: `${vehicle.make} ${vehicle.model} ${vehicle.variant}`,
+          preferredDate: values.preferredDate || undefined,
+          preferredTime: values.preferredTime || undefined,
+          marketingConsent: values.marketingConsent,
+        }),
+      ).unwrap();
+      setSubmitted(true);
+    } catch (message) {
+      setError("root.server", { message: String(message) });
+    }
+  });
+
+  const handleClose = () => {
+    onOpenChange(false);
+    if (submitted) {
+      setSubmitted(false);
+      reset(testDriveDefaults);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-lg bg-surface border-white/10">
+        <DialogHeader>
+          <DialogTitle className="text-white">Book a Test Drive</DialogTitle>
+          <DialogDescription>
+            {vehicle.year} {vehicle.make} {vehicle.model} {vehicle.variant}
+          </DialogDescription>
+        </DialogHeader>
+
+        {submitted ? (
+          <div className="text-center py-8">
+            <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-7 h-7 text-emerald-400" />
+            </div>
+            <h3 className="font-semibold text-white mb-1">Booking Received!</h3>
+            <p className="text-sm text-zinc-400">
+              We&apos;ll confirm your test drive shortly.
+            </p>
+            <Button
+              className="mt-4 btn-gradient rounded-xl"
+              onClick={handleClose}
+            >
+              Close
+            </Button>
+          </div>
+        ) : (
+          <form className="space-y-4" onSubmit={onSubmit} noValidate>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="td-firstName" className="text-xs text-zinc-400 mb-1 block">
+                  First Name *
+                </Label>
+                <Input
+                  id="td-firstName"
+                  autoComplete="given-name"
+                  placeholder="e.g. James"
+                  {...register("firstName")}
+                  {...fieldAria("td-firstName", errors.firstName?.message)}
+                  className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
+                />
+                <FieldError id="td-firstName-error" message={errors.firstName?.message} />
+              </div>
+              <div>
+                <Label htmlFor="td-lastName" className="text-xs text-zinc-400 mb-1 block">
+                  Last Name
+                </Label>
+                <Input
+                  id="td-lastName"
+                  autoComplete="family-name"
+                  placeholder="e.g. Mitchell"
+                  {...register("lastName")}
+                  {...fieldAria("td-lastName", errors.lastName?.message)}
+                  className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
+                />
+                <FieldError id="td-lastName-error" message={errors.lastName?.message} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="td-email" className="text-xs text-zinc-400 mb-1 block">
+                  Email *
+                </Label>
+                <Input
+                  id="td-email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="Your email"
+                  {...register("email")}
+                  {...fieldAria("td-email", errors.email?.message)}
+                  className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
+                />
+                <FieldError id="td-email-error" message={errors.email?.message} />
+              </div>
+              <div>
+                <Label htmlFor="td-phone" className="text-xs text-zinc-400 mb-1 block">
+                  Phone *
+                </Label>
+                <Input
+                  id="td-phone"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="07700 900123"
+                  {...register("phone")}
+                  {...fieldAria("td-phone", errors.phone?.message)}
+                  className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
+                />
+                <FieldError id="td-phone-error" message={errors.phone?.message} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="td-date" className="text-xs text-zinc-400 mb-1 block">
+                  Preferred Date
+                </Label>
+                <Input
+                  id="td-date"
+                  type="date"
+                  // Set on focus, not during render: reading the clock while the page
+                  // prerenders would push the whole vehicle page to client rendering.
+                  onFocus={(e) => {
+                    e.currentTarget.min = todayIso();
+                  }}
+                  {...register("preferredDate")}
+                  {...fieldAria("td-date", errors.preferredDate?.message)}
+                  className="rounded-xl bg-white/5 border-white/10 text-white"
+                />
+                <FieldError id="td-date-error" message={errors.preferredDate?.message} />
+              </div>
+              <div>
+                <Label htmlFor="td-time" className="text-xs text-zinc-400 mb-1 block">
+                  Preferred Time
+                </Label>
+                <Controller
+                  control={control}
+                  name="preferredTime"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={(val) => field.onChange(val ?? "")}>
+                      <SelectTrigger
+                        id="td-time"
+                        ref={field.ref}
+                        className="rounded-xl bg-white/5 border-white/10 text-white"
+                      >
+                        <SelectValue placeholder="Select time" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-surface border-white/10">
+                        {TIME_SLOTS.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="td-message" className="text-xs text-zinc-400 mb-1 block">
+                Message (Optional)
+              </Label>
+              <Input
+                id="td-message"
+                placeholder="Any specific requests or questions?"
+                {...register("message")}
+                {...fieldAria("td-message", errors.message?.message)}
+                className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
+              />
+              <FieldError id="td-message-error" message={errors.message?.message} />
+            </div>
+
+            <Controller
+              control={control}
+              name="marketingConsent"
+              render={({ field }) => (
+                <div className="flex items-start gap-2.5">
+                  <Checkbox
+                    id="td-marketing"
+                    checked={field.value}
+                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                    className="mt-0.5 border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
+                  />
+                  <Label htmlFor="td-marketing" className="text-xs text-zinc-400 leading-relaxed cursor-pointer">
+                    I&apos;d like to receive vehicle updates and offers.
+                  </Label>
+                </div>
+              )}
+            />
+
+            <FormError message={errors.root?.server?.message} />
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold"
+            >
+              <Calendar className="w-4 h-4" />
+              {isSubmitting ? "Sending…" : "Book My Test Drive"}
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

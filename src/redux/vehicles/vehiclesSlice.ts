@@ -1,214 +1,271 @@
-import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import { mockVehicles } from "./vehiclesMockData";
-import { fetchVehicles } from "./vehiclesThunks";
+import { createSlice, isAnyOf, type PayloadAction } from "@reduxjs/toolkit";
+import {
+  addVehicle,
+  deleteVehicle,
+  fetchAllVehicles,
+  fetchFeaturedVehicles,
+  fetchSimilarVehicles,
+  fetchVehicleById,
+  fetchVehicleFacets,
+  fetchVehicles,
+  setVehicleFeatured,
+  setVehicleStatus,
+  updateVehicle,
+} from "./vehiclesThunks";
+import { listingQueries } from "./vehiclesApi";
 import type { Vehicle, VehicleFilters, VehiclesState } from "./vehiclesTypes";
 import { initialFilters } from "./vehiclesTypes";
 
-function applyFiltersAndSort(
-  vehicles: Vehicle[],
-  filters: VehicleFilters,
-): Vehicle[] {
-  let result = [...vehicles];
+const initialState: VehiclesState = {
+  allVehicles: [],
+  allStatus: "idle",
+  allError: null,
 
-  if (filters.search) {
-    const q = filters.search.toLowerCase();
-    result = result.filter(
-      (v) =>
-        v.make.toLowerCase().includes(q) ||
-        v.model.toLowerCase().includes(q) ||
-        v.variant.toLowerCase().includes(q),
-    );
-  }
+  filteredVehicles: [],
+  filters: initialFilters,
+  currentPage: 1,
+  pageSize: 9,
+  totalPages: 1,
+  totalCount: 0,
+  status: "idle",
+  error: null,
 
-  if (filters.make) {
-    result = result.filter(
-      (v) => v.make.toLowerCase() === filters.make.toLowerCase(),
-    );
-  }
+  facets: null,
+  facetsStatus: "idle",
 
-  result = result.filter(
-    (v) =>
-      v.price >= filters.priceRange[0] && v.price <= filters.priceRange[1],
-  );
+  listKey: null,
+  facetsKey: null,
+  inFlightKey: null,
 
-  if (filters.yearFrom) {
-    result = result.filter((v) => v.year >= parseInt(filters.yearFrom));
-  }
-  if (filters.yearTo) {
-    result = result.filter((v) => v.year <= parseInt(filters.yearTo));
-  }
+  featured: [],
+  featuredStatus: "idle",
 
-  if (filters.fuelTypes.length > 0) {
-    result = result.filter((v) => filters.fuelTypes.includes(v.fuelType));
-  }
+  selectedVehicle: null,
+  similarVehicles: [],
+  selectedStatus: "idle",
 
-  if (filters.transmissions.length > 0) {
-    result = result.filter((v) =>
-      filters.transmissions.includes(v.transmission),
-    );
-  }
+  mutationStatus: "idle",
+  mutationError: null,
+};
 
-  if (filters.bodyTypes.length > 0) {
-    result = result.filter((v) => filters.bodyTypes.includes(v.bodyType));
-  }
-
-  switch (filters.sortBy) {
-    case "newest":
-      result.sort((a, b) => b.year - a.year);
-      break;
-    case "price-low":
-      result.sort((a, b) => a.price - b.price);
-      break;
-    case "price-high":
-      result.sort((a, b) => b.price - a.price);
-      break;
-    case "mileage":
-      result.sort((a, b) => a.mileage - b.mileage);
-      break;
-  }
-
-  return result;
-}
-
-function refilter(state: VehiclesState) {
+/** Filter changes reset to page 1; the page component refetches on change. */
+function filtersChanged(state: VehiclesState) {
   state.currentPage = 1;
-  state.filteredVehicles = applyFiltersAndSort(
-    state.allVehicles,
-    state.filters,
-  );
-  state.totalPages = Math.ceil(
-    state.filteredVehicles.length / state.pageSize,
-  );
 }
 
-const initialFiltered = applyFiltersAndSort(mockVehicles, initialFilters);
+function toggle(list: string[], value: string) {
+  const idx = list.indexOf(value);
+  if (idx >= 0) list.splice(idx, 1);
+  else list.push(value);
+}
+
+/** Stock changed — the next listing fetch must hit the API (results and facets). */
+function staleListing(state: VehiclesState) {
+  state.listKey = null;
+  state.facetsKey = null;
+}
+
+/** Apply a saved vehicle to every cached list that contains it. */
+function replaceEverywhere(state: VehiclesState, vehicle: Vehicle) {
+  for (const list of [state.allVehicles, state.filteredVehicles, state.featured, state.similarVehicles]) {
+    const idx = list.findIndex((v) => v.id === vehicle.id);
+    if (idx !== -1) list[idx] = vehicle;
+  }
+  if (state.selectedVehicle?.id === vehicle.id) state.selectedVehicle = vehicle;
+}
 
 const vehiclesSlice = createSlice({
   name: "vehicles",
-  initialState: {
-    allVehicles: mockVehicles,
-    filteredVehicles: initialFiltered,
-    filters: initialFilters,
-    currentPage: 1,
-    pageSize: 9,
-    totalPages: Math.ceil(initialFiltered.length / 9),
-    status: "idle",
-  } as VehiclesState,
+  initialState,
   reducers: {
     setSearch(state, action: PayloadAction<string>) {
       state.filters.search = action.payload;
-      refilter(state);
+      filtersChanged(state);
     },
     setMake(state, action: PayloadAction<string>) {
       state.filters.make = action.payload;
-      refilter(state);
+      filtersChanged(state);
     },
     setPriceRange(state, action: PayloadAction<[number, number]>) {
       state.filters.priceRange = action.payload;
-      refilter(state);
+      filtersChanged(state);
     },
     setYearFrom(state, action: PayloadAction<string>) {
       state.filters.yearFrom = action.payload;
-      refilter(state);
+      filtersChanged(state);
     },
     setYearTo(state, action: PayloadAction<string>) {
       state.filters.yearTo = action.payload;
-      refilter(state);
+      filtersChanged(state);
     },
     toggleFuelType(state, action: PayloadAction<string>) {
-      const idx = state.filters.fuelTypes.indexOf(action.payload);
-      if (idx >= 0) {
-        state.filters.fuelTypes.splice(idx, 1);
-      } else {
-        state.filters.fuelTypes.push(action.payload);
-      }
-      refilter(state);
+      toggle(state.filters.fuelTypes, action.payload);
+      filtersChanged(state);
     },
     toggleTransmission(state, action: PayloadAction<string>) {
-      const idx = state.filters.transmissions.indexOf(action.payload);
-      if (idx >= 0) {
-        state.filters.transmissions.splice(idx, 1);
-      } else {
-        state.filters.transmissions.push(action.payload);
-      }
-      refilter(state);
+      toggle(state.filters.transmissions, action.payload);
+      filtersChanged(state);
     },
     toggleBodyType(state, action: PayloadAction<string>) {
-      const idx = state.filters.bodyTypes.indexOf(action.payload);
-      if (idx >= 0) {
-        state.filters.bodyTypes.splice(idx, 1);
-      } else {
-        state.filters.bodyTypes.push(action.payload);
-      }
-      refilter(state);
+      toggle(state.filters.bodyTypes, action.payload);
+      filtersChanged(state);
     },
     setSortBy(state, action: PayloadAction<VehicleFilters["sortBy"]>) {
       state.filters.sortBy = action.payload;
-      refilter(state);
+      filtersChanged(state);
     },
     setPage(state, action: PayloadAction<number>) {
-      state.currentPage = Math.max(
-        1,
-        Math.min(action.payload, state.totalPages),
-      );
+      state.currentPage = Math.max(1, Math.min(action.payload, state.totalPages));
     },
-    setFiltersFromParams(state, action: PayloadAction<Partial<VehicleFilters> & { page?: number }>) {
+    setFiltersFromParams(
+      state,
+      action: PayloadAction<Partial<VehicleFilters> & { page?: number }>,
+    ) {
       const { page, ...filterOverrides } = action.payload;
       state.filters = { ...initialFilters, ...filterOverrides };
-      state.filteredVehicles = applyFiltersAndSort(
-        state.allVehicles,
-        state.filters,
-      );
-      state.totalPages = Math.ceil(
-        state.filteredVehicles.length / state.pageSize,
-      );
-      state.currentPage = page
-        ? Math.max(1, Math.min(page, state.totalPages))
-        : 1;
+      // Total pages isn't known until the API responds, so only clamp the lower bound.
+      state.currentPage = page ? Math.max(1, page) : 1;
     },
     resetFilters(state) {
       state.filters = initialFilters;
-      refilter(state);
+      filtersChanged(state);
     },
-    addVehicle(state, action: PayloadAction<Omit<Vehicle, "id">>) {
-      const newVehicle: Vehicle = {
-        ...action.payload,
-        id: String(Date.now()),
-      };
-      state.allVehicles.push(newVehicle);
-      refilter(state);
-    },
-    updateVehicle(state, action: PayloadAction<Vehicle>) {
-      const idx = state.allVehicles.findIndex((v) => v.id === action.payload.id);
-      if (idx !== -1) {
-        state.allVehicles[idx] = action.payload;
-        refilter(state);
-      }
-    },
-    deleteVehicle(state, action: PayloadAction<string>) {
-      state.allVehicles = state.allVehicles.filter((v) => v.id !== action.payload);
-      refilter(state);
+    clearVehiclesError(state) {
+      state.error = null;
+      state.allError = null;
+      state.mutationError = null;
     },
   },
   extraReducers: (builder) => {
     builder
+      // Public listing page
       .addCase(fetchVehicles.pending, (state) => {
         state.status = "loading";
+        state.error = null;
+        state.inFlightKey = listingQueries(state).listKey;
       })
-      .addCase(fetchVehicles.fulfilled, (state, action) => {
+      .addCase(fetchVehicles.fulfilled, (state, { payload }) => {
         state.status = "succeeded";
-        state.allVehicles = action.payload;
-        state.filteredVehicles = applyFiltersAndSort(
-          action.payload,
-          state.filters,
-        );
-        state.totalPages = Math.ceil(
-          state.filteredVehicles.length / state.pageSize,
-        );
+        state.inFlightKey = null;
+        state.listKey = payload.listKey;
+        state.filteredVehicles = payload.data;
+        state.totalCount = payload.meta.total;
+        state.totalPages = payload.meta.totalPages;
+        if (payload.facets) {
+          state.facets = payload.facets;
+          state.facetsKey = payload.facetsKey;
+          state.facetsStatus = "succeeded";
+        }
+        if (state.currentPage > payload.meta.totalPages) state.currentPage = payload.meta.totalPages;
       })
-      .addCase(fetchVehicles.rejected, (state) => {
+      .addCase(fetchVehicles.rejected, (state, { payload, meta }) => {
+        state.inFlightKey = null;
+        if (meta.aborted) return; // superseded by a newer request
         state.status = "failed";
-      });
+        state.error = payload ?? "Could not load vehicles";
+      })
+
+      // Filter sidebar facets
+      .addCase(fetchVehicleFacets.pending, (state) => {
+        state.facetsStatus = "loading";
+      })
+      .addCase(fetchVehicleFacets.fulfilled, (state, { payload }) => {
+        state.facetsStatus = "succeeded";
+        state.facets = payload;
+      })
+      .addCase(fetchVehicleFacets.rejected, (state, { meta }) => {
+        if (!meta.aborted) state.facetsStatus = "failed";
+      })
+
+      // Full inventory
+      .addCase(fetchAllVehicles.pending, (state) => {
+        state.allStatus = "loading";
+        state.allError = null;
+      })
+      .addCase(fetchAllVehicles.fulfilled, (state, { payload }) => {
+        state.allStatus = "succeeded";
+        state.allVehicles = payload;
+      })
+      .addCase(fetchAllVehicles.rejected, (state, { payload }) => {
+        state.allStatus = "failed";
+        state.allError = payload ?? "Could not load vehicles";
+      })
+
+      // Featured
+      .addCase(fetchFeaturedVehicles.pending, (state) => {
+        state.featuredStatus = "loading";
+      })
+      .addCase(fetchFeaturedVehicles.fulfilled, (state, { payload }) => {
+        state.featuredStatus = "succeeded";
+        state.featured = payload;
+      })
+      .addCase(fetchFeaturedVehicles.rejected, (state) => {
+        state.featuredStatus = "failed";
+      })
+
+      // Single vehicle + similar
+      .addCase(fetchVehicleById.pending, (state) => {
+        state.selectedStatus = "loading";
+      })
+      .addCase(fetchVehicleById.fulfilled, (state, { payload }) => {
+        state.selectedStatus = "succeeded";
+        state.selectedVehicle = payload;
+      })
+      .addCase(fetchVehicleById.rejected, (state) => {
+        state.selectedStatus = "failed";
+        state.selectedVehicle = null;
+      })
+      .addCase(fetchSimilarVehicles.fulfilled, (state, { payload }) => {
+        state.similarVehicles = payload;
+      })
+
+      // Admin mutations
+      .addCase(addVehicle.fulfilled, (state, { payload }) => {
+        state.mutationStatus = "succeeded";
+        staleListing(state);
+        state.allVehicles.unshift(payload);
+      })
+      .addCase(deleteVehicle.fulfilled, (state, { payload: id }) => {
+        state.mutationStatus = "succeeded";
+        staleListing(state);
+        state.allVehicles = state.allVehicles.filter((v) => v.id !== id);
+        state.filteredVehicles = state.filteredVehicles.filter((v) => v.id !== id);
+        state.featured = state.featured.filter((v) => v.id !== id);
+      })
+      .addMatcher(
+        isAnyOf(updateVehicle.fulfilled, setVehicleFeatured.fulfilled, setVehicleStatus.fulfilled),
+        (state, { payload }) => {
+          state.mutationStatus = "succeeded";
+          staleListing(state);
+          replaceEverywhere(state, payload);
+        },
+      )
+      .addMatcher(
+        isAnyOf(
+          addVehicle.pending,
+          updateVehicle.pending,
+          deleteVehicle.pending,
+          setVehicleFeatured.pending,
+          setVehicleStatus.pending,
+        ),
+        (state) => {
+          state.mutationStatus = "loading";
+          state.mutationError = null;
+        },
+      )
+      .addMatcher(
+        isAnyOf(
+          addVehicle.rejected,
+          updateVehicle.rejected,
+          deleteVehicle.rejected,
+          setVehicleFeatured.rejected,
+          setVehicleStatus.rejected,
+        ),
+        (state, { payload }) => {
+          state.mutationStatus = "failed";
+          state.mutationError = payload ?? "Request failed";
+        },
+      );
   },
 });
 
@@ -225,9 +282,7 @@ export const {
   setPage,
   setFiltersFromParams,
   resetFilters,
-  addVehicle,
-  updateVehicle,
-  deleteVehicle,
+  clearVehiclesError,
 } = vehiclesSlice.actions;
 
 export default vehiclesSlice.reducer;

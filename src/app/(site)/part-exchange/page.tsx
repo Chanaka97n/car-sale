@@ -20,6 +20,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Link from "next/link";
+import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { useAppDispatch } from "@/redux/hooks";
+import { addEnquiry } from "@/redux/admin/enquiries/enquiriesIndex";
+import { FieldError, FormError, fieldAria } from "@/components/forms/form-errors";
+import {
+  partExchangeDefaults,
+  partExchangeSchema,
+  toInt,
+  type PartExchangeValues,
+} from "@/lib/validation";
 
 const steps = [
   {
@@ -46,6 +58,46 @@ const steps = [
 ];
 
 export default function PartExchangePage() {
+  const dispatch = useAppDispatch();
+  const [submitted, setSubmitted] = useState(false);
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<PartExchangeValues>({
+    resolver: yupResolver(partExchangeSchema),
+    defaultValues: partExchangeDefaults,
+    mode: "onTouched",
+  });
+
+  // Sent as a "part-exchange" enquiry → appears in Admin › Enquiries.
+  const onSubmit = handleSubmit(async (values) => {
+    const [firstName, ...rest] = values.name.trim().split(/\s+/);
+    const registration = values.registration.replace(/\s+/g, "").toUpperCase();
+    try {
+      await dispatch(
+        addEnquiry({
+          type: "part-exchange",
+          firstName,
+          lastName: rest.join(" "),
+          phone: values.phone,
+          marketingConsent: false,
+          message: `Part-exchange valuation request for ${registration}.`,
+          pxRegistration: registration,
+          pxMileage: toInt(values.mileage),
+          pxCondition: values.condition || undefined,
+        }),
+      ).unwrap();
+      setSubmitted(true);
+      reset(partExchangeDefaults);
+    } catch (message) {
+      setError("root.server", { message: String(message) });
+    }
+  });
+
   return (
     <>
       {/* Hero */}
@@ -140,74 +192,130 @@ export default function PartExchangePage() {
             viewport={{ once: true }}
             className="bg-surface rounded-2xl border border-white/5 p-8"
           >
-            <form className="space-y-5">
+            {submitted ? (
+              <div className="text-center py-8" role="status">
+                <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-white mb-2">Valuation request sent</h3>
+                <p className="text-zinc-400 mb-6">
+                  Our team will call you shortly with a valuation for your vehicle.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSubmitted(false)}
+                  className="rounded-full border-white/20 text-white hover:bg-white/5"
+                >
+                  Value another car
+                </Button>
+              </div>
+            ) : (
+            <form className="space-y-5" onSubmit={onSubmit} noValidate>
               <div>
-                <Label className="text-xs text-zinc-400 mb-1.5 block">
-                  Registration Number
+                <Label htmlFor="px-registration" className="text-xs text-zinc-400 mb-1.5 block">
+                  Registration Number *
                 </Label>
                 <Input
+                  id="px-registration"
+                  maxLength={10}
+                  autoCapitalize="characters"
                   placeholder="e.g. AB12 CDE"
+                  {...register("registration")}
+                  {...fieldAria("px-registration", errors.registration?.message)}
                   className="rounded-xl bg-white/5 border-white/10 text-white text-center text-lg font-bold uppercase placeholder:text-zinc-600 h-14"
                 />
+                <FieldError id="px-registration-error" message={errors.registration?.message} />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-xs text-zinc-400 mb-1.5 block">
+                  <Label htmlFor="px-mileage" className="text-xs text-zinc-400 mb-1.5 block">
                     Current Mileage
                   </Label>
                   <Input
-                    type="number"
+                    id="px-mileage"
+                    inputMode="numeric"
                     placeholder="e.g. 45,000"
+                    {...register("mileage")}
+                    {...fieldAria("px-mileage", errors.mileage?.message)}
                     className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                   />
+                  <FieldError id="px-mileage-error" message={errors.mileage?.message} />
                 </div>
                 <div>
-                  <Label className="text-xs text-zinc-400 mb-1.5 block">
+                  <Label htmlFor="px-condition" className="text-xs text-zinc-400 mb-1.5 block">
                     Condition
                   </Label>
-                  <Select>
-                    <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white">
-                      <SelectValue placeholder="Select condition" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-surface border-white/10">
-                      <SelectItem value="excellent">Excellent</SelectItem>
-                      <SelectItem value="good">Good</SelectItem>
-                      <SelectItem value="fair">Fair</SelectItem>
-                      <SelectItem value="poor">Poor</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Controller
+                    control={control}
+                    name="condition"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={(val) => field.onChange(val ?? "")}>
+                        <SelectTrigger
+                          id="px-condition"
+                          ref={field.ref}
+                          {...fieldAria("px-condition", errors.condition?.message)}
+                          className="rounded-xl bg-white/5 border-white/10 text-white"
+                        >
+                          <SelectValue placeholder="Select condition" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-surface border-white/10">
+                          <SelectItem value="excellent">Excellent</SelectItem>
+                          <SelectItem value="good">Good</SelectItem>
+                          <SelectItem value="fair">Fair</SelectItem>
+                          <SelectItem value="poor">Poor</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  <FieldError id="px-condition-error" message={errors.condition?.message} />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-xs text-zinc-400 mb-1.5 block">
+                  <Label htmlFor="px-name" className="text-xs text-zinc-400 mb-1.5 block">
                     Your Name *
                   </Label>
                   <Input
+                    id="px-name"
+                    autoComplete="name"
                     placeholder="Full name"
+                    {...register("name")}
+                    {...fieldAria("px-name", errors.name?.message)}
                     className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                   />
+                  <FieldError id="px-name-error" message={errors.name?.message} />
                 </div>
                 <div>
-                  <Label className="text-xs text-zinc-400 mb-1.5 block">
+                  <Label htmlFor="px-phone" className="text-xs text-zinc-400 mb-1.5 block">
                     Phone Number *
                   </Label>
                   <Input
+                    id="px-phone"
                     type="tel"
+                    autoComplete="tel"
                     placeholder="07700 900123"
+                    {...register("phone")}
+                    {...fieldAria("px-phone", errors.phone?.message)}
                     className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                   />
+                  <FieldError id="px-phone-error" message={errors.phone?.message} />
                 </div>
               </div>
 
-              <Button className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold">
+              <FormError message={errors.root?.server?.message} />
+
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold"
+              >
                 <ArrowLeftRight className="w-4 h-4" />
-                Get My Free Valuation
+                {isSubmitting ? "Sending…" : "Get My Free Valuation"}
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </form>
+            )}
           </motion.div>
         </div>
       </section>

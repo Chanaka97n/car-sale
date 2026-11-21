@@ -1,64 +1,88 @@
-import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, isAnyOf } from "@reduxjs/toolkit";
+import type { RequestStatus } from "../../createAppAsyncThunk";
 import { MAKES, BODY_TYPES, FUEL_TYPES } from "../../vehicles/vehiclesTypes";
+import { addOption, fetchSettings, removeOption, reorderOption } from "./settingsThunks";
 
-const STORAGE_KEY = "apex_admin_settings";
+export type SettingsListKey =
+  | "makes"
+  | "bodyTypes"
+  | "fuelTypes"
+  | "transmissions"
+  | "conditions"
+  | "drivetrains";
+export type SettingsLists = Record<SettingsListKey, string[]>;
 
-export interface SettingsState {
-  makes: string[];
-  bodyTypes: string[];
-  fuelTypes: string[];
-  transmissions: string[];
+export interface SettingsState extends SettingsLists {
+  status: RequestStatus;
+  error: string | null;
+  /** Last admin mutation (add / remove / reorder). */
+  mutationStatus: RequestStatus;
+  mutationError: string | null;
 }
 
-const defaults: SettingsState = {
+/** Shown until GET /settings resolves, so dropdowns are never empty on first paint. */
+const initialState: SettingsState = {
   makes: [...MAKES],
   bodyTypes: [...BODY_TYPES],
   fuelTypes: [...FUEL_TYPES],
   transmissions: ["Automatic", "Manual"],
+  conditions: ["New", "Used", "Certified Pre-Owned"],
+  drivetrains: ["FWD", "RWD", "AWD", "4WD"],
+  status: "idle",
+  error: null,
+  mutationStatus: "idle",
+  mutationError: null,
 };
-
-function loadSettings(): SettingsState {
-  try {
-    const stored = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-    if (stored) return { ...defaults, ...JSON.parse(stored) };
-  } catch {}
-  return defaults;
-}
-
-function persistSettings(state: SettingsState) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {}
-}
-
-type ListKey = "makes" | "bodyTypes" | "fuelTypes" | "transmissions";
 
 const settingsSlice = createSlice({
   name: "settings",
-  initialState: loadSettings,
+  initialState,
   reducers: {
-    addOption(state, action: PayloadAction<{ list: ListKey; value: string }>) {
-      const { list, value } = action.payload;
-      const trimmed = value.trim();
-      if (trimmed && !state[list].includes(trimmed)) {
-        state[list].push(trimmed);
-        persistSettings(state);
-      }
+    clearSettingsError(state) {
+      state.error = null;
+      state.mutationError = null;
     },
-    removeOption(state, action: PayloadAction<{ list: ListKey; value: string }>) {
-      const { list, value } = action.payload;
-      state[list] = state[list].filter((item) => item !== value);
-      persistSettings(state);
-    },
-    reorderOption(state, action: PayloadAction<{ list: ListKey; from: number; to: number }>) {
-      const { list, from, to } = action.payload;
-      const arr = state[list];
-      const [item] = arr.splice(from, 1);
-      arr.splice(to, 0, item);
-      persistSettings(state);
-    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchSettings.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+      })
+      .addCase(fetchSettings.fulfilled, (state, { payload }) => {
+        state.status = "succeeded";
+        state.makes = payload.makes;
+        state.bodyTypes = payload.bodyTypes;
+        state.fuelTypes = payload.fuelTypes;
+        state.transmissions = payload.transmissions;
+        // Older APIs may not return the newer lists yet — keep the defaults then.
+        state.conditions = payload.conditions ?? state.conditions;
+        state.drivetrains = payload.drivetrains ?? state.drivetrains;
+      })
+      .addCase(fetchSettings.rejected, (state, { payload }) => {
+        state.status = "failed";
+        state.error = payload ?? "Could not load settings";
+      })
+      .addMatcher(isAnyOf(addOption.pending, removeOption.pending, reorderOption.pending), (state) => {
+        state.mutationStatus = "loading";
+        state.mutationError = null;
+      })
+      .addMatcher(
+        isAnyOf(addOption.fulfilled, removeOption.fulfilled, reorderOption.fulfilled),
+        (state, { payload }) => {
+          state.mutationStatus = "succeeded";
+          state[payload.list] = payload.values;
+        },
+      )
+      .addMatcher(
+        isAnyOf(addOption.rejected, removeOption.rejected, reorderOption.rejected),
+        (state, { payload }) => {
+          state.mutationStatus = "failed";
+          state.mutationError = payload ?? "Could not update settings";
+        },
+      );
   },
 });
 
-export const { addOption, removeOption, reorderOption } = settingsSlice.actions;
+export const { clearSettingsError } = settingsSlice.actions;
 export default settingsSlice.reducer;

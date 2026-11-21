@@ -1,8 +1,15 @@
 "use client";
 
-import { useAppSelector } from "@/redux/hooks";
+import { useEffect } from "react";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { selectUser } from "@/redux/admin/auth/authIndex";
-import { selectUsers } from "@/redux/admin/users/usersIndex";
+import {
+  fetchDashboard,
+  selectDashboard,
+  selectDashboardError,
+} from "@/redux/admin/dashboard/dashboardIndex";
+import { fetchAllVehicles, selectAllVehicles } from "@/redux/vehicles/vehiclesIndex";
+import { AdminAlert } from "@/components/admin/admin-alert";
 import Link from "next/link";
 import {
   Car,
@@ -17,32 +24,39 @@ import {
   Plus,
   Settings,
   BarChart3,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, getFuelVariant } from "@/components/admin/status-badge";
 
 export default function AdminDashboardPage() {
+  const dispatch = useAppDispatch();
   const user = useAppSelector(selectUser);
-  const allVehicles = useAppSelector((s) => s.vehicles.allVehicles);
-  const users = useAppSelector(selectUsers);
+  const overview = useAppSelector(selectDashboard);
+  const dashboardError = useAppSelector(selectDashboardError);
+  const allVehicles = useAppSelector(selectAllVehicles);
 
-  const totalValue = allVehicles.reduce((sum, v) => sum + v.price, 0);
-  const avgPrice = allVehicles.length > 0 ? totalValue / allVehicles.length : 0;
-  const featuredCount = allVehicles.filter((v) => v.featured).length;
-  const activeUsers = users.filter((u) => u.status === "active").length;
+  // Stats are aggregated by the API (GET /admin/dashboard); the vehicle list is only
+  // needed for the "recent stock" table.
+  useEffect(() => {
+    dispatch(fetchDashboard());
+    dispatch(fetchAllVehicles({ force: true }));
+  }, [dispatch]);
 
-  const fuelBreakdown = allVehicles.reduce<Record<string, number>>((acc, v) => {
-    acc[v.fuelType] = (acc[v.fuelType] || 0) + 1;
-    return acc;
-  }, {});
+  const totalVehicles = overview?.vehicles.total ?? 0;
+  const totalValue = overview?.vehicles.stockValue ?? 0;
+  const avgPrice = overview?.vehicles.avgPrice ?? 0;
+  const featuredCount = overview?.vehicles.featured ?? 0;
+  const totalEnquiries = overview?.enquiries.total ?? 0;
+  const newEnquiriesCount = overview?.enquiries.new ?? 0;
 
-  const makeBreakdown = allVehicles.reduce<Record<string, number>>((acc, v) => {
-    acc[v.make] = (acc[v.make] || 0) + 1;
-    return acc;
-  }, {});
-  const topMakes = Object.entries(makeBreakdown)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 6);
+  const fuelBreakdown = Object.fromEntries(
+    (overview?.vehicles.byFuelType ?? []).map((row) => [row.name, row.count]),
+  ) as Record<string, number>;
+
+  const topMakes: [string, number][] = (overview?.vehicles.byMake ?? [])
+    .slice(0, 6)
+    .map((row) => [row.name, row.count]);
   const maxMakeCount = topMakes.length > 0 ? topMakes[0][1] : 1;
 
   const recentVehicles = [...allVehicles]
@@ -52,7 +66,7 @@ export default function AdminDashboardPage() {
   const stats = [
     {
       label: "Total Vehicles",
-      value: allVehicles.length,
+      value: totalVehicles,
       icon: Car,
       trend: "+3 this month",
       trendUp: true,
@@ -74,18 +88,18 @@ export default function AdminDashboardPage() {
       label: "Featured",
       value: featuredCount,
       icon: TrendingUp,
-      trend: `${allVehicles.length > 0 ? ((featuredCount / allVehicles.length) * 100).toFixed(0) : 0}% of stock`,
+      trend: `${totalVehicles > 0 ? ((featuredCount / totalVehicles) * 100).toFixed(0) : 0}% of stock`,
       trendUp: true,
       color: "text-blue-400",
       bgColor: "bg-blue-500/10",
       borderColor: "border-blue-500/20",
     },
     {
-      label: "Active Users",
-      value: activeUsers,
-      icon: Users,
-      trend: `${users.length} total`,
-      trendUp: activeUsers === users.length,
+      label: "Enquiries",
+      value: totalEnquiries,
+      icon: MessageSquare,
+      trend: `${newEnquiriesCount} new`,
+      trendUp: newEnquiriesCount > 0,
       color: "text-purple-400",
       bgColor: "bg-purple-500/10",
       borderColor: "border-purple-500/20",
@@ -127,6 +141,8 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      {dashboardError && <AdminAlert className="mb-0">{dashboardError}</AdminAlert>}
+
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
@@ -166,7 +182,7 @@ export default function AdminDashboardPage() {
               </div>
               <div>
                 <h2 className="text-sm font-semibold text-white">Inventory by Make</h2>
-                <p className="text-xs text-zinc-500">{Object.keys(makeBreakdown).length} brands in stock</p>
+                <p className="text-xs text-zinc-500">{overview?.vehicles.byMake.length ?? 0} brands in stock</p>
               </div>
             </div>
             <Link href="/admin/vehicles" className="text-xs text-orange hover:text-orange-light transition-colors">
@@ -187,7 +203,7 @@ export default function AdminDashboardPage() {
                   </span>
                 </div>
                 <span className="text-xs text-zinc-500 w-10 text-right">
-                  {allVehicles.length > 0 ? ((count / allVehicles.length) * 100).toFixed(0) : 0}%
+                  {totalVehicles > 0 ? ((count / totalVehicles) * 100).toFixed(0) : 0}%
                 </span>
               </div>
             ))}
@@ -298,7 +314,22 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Link href="/admin/enquiries" className="group bg-surface rounded-xl border border-white/5 hover:border-purple-500/20 p-5 transition-all">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors relative">
+              <MessageSquare className="w-5 h-5 text-purple-400" />
+              {newEnquiriesCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {newEnquiriesCount}
+                </span>
+              )}
+            </div>
+            <ArrowUpRight className="w-4 h-4 text-zinc-600 ml-auto group-hover:text-purple-400 transition-colors" />
+          </div>
+          <h3 className="text-sm font-semibold text-white">Enquiries</h3>
+          <p className="text-xs text-zinc-500 mt-1">View and manage customer enquiries</p>
+        </Link>
         <Link href="/admin/vehicles" className="group bg-surface rounded-xl border border-white/5 hover:border-orange/20 p-5 transition-all">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-xl bg-orange/10 border border-orange/20 flex items-center justify-center group-hover:bg-orange/20 transition-colors">
@@ -319,12 +350,12 @@ export default function AdminDashboardPage() {
           <h3 className="text-sm font-semibold text-white">Manage Users</h3>
           <p className="text-xs text-zinc-500 mt-1">Control team access and permissions</p>
         </Link>
-        <Link href="/admin/settings" className="group bg-surface rounded-xl border border-white/5 hover:border-purple-500/20 p-5 transition-all">
+        <Link href="/admin/settings" className="group bg-surface rounded-xl border border-white/5 hover:border-emerald-500/20 p-5 transition-all">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
-              <Settings className="w-5 h-5 text-purple-400" />
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+              <Settings className="w-5 h-5 text-emerald-400" />
             </div>
-            <ArrowUpRight className="w-4 h-4 text-zinc-600 ml-auto group-hover:text-purple-400 transition-colors" />
+            <ArrowUpRight className="w-4 h-4 text-zinc-600 ml-auto group-hover:text-emerald-400 transition-colors" />
           </div>
           <h3 className="text-sm font-semibold text-white">Settings</h3>
           <p className="text-xs text-zinc-500 mt-1">Configure dropdown options and preferences</p>

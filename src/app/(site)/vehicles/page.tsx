@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useCallback, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -30,6 +30,9 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import Link from "next/link";
+import { vehiclePath } from "@/lib/vehicle-url";
+import { defaultIntentFor, vehicleEnquiryHref } from "@/lib/enquiry-intent";
+import { SoldOutOverlay } from "@/components/vehicles/sold-out-stamp";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import {
   setSearch,
@@ -53,11 +56,20 @@ import {
   selectPageSize,
   selectStatus,
   initialFilters,
-  MAKES,
-  BODY_TYPES,
-  FUEL_TYPES,
+  selectVehiclesError,
+  selectVehicleFacets,
+  selectPriceSliderMax,
   type VehicleFilters,
+  type VehicleFacets,
+  type FacetCount,
 } from "@/redux/vehicles/vehiclesIndex";
+import {
+  fetchSettings,
+  selectMakes,
+  selectFuelTypes,
+  selectBodyTypes,
+  selectTransmissions,
+} from "@/redux/admin/settings/settingsIndex";
 
 // --- Search params helpers ---
 
@@ -132,11 +144,217 @@ function searchParamsToFilters(params: URLSearchParams): Partial<VehicleFilters>
   return result;
 }
 
+// --- Request pacing ---
+
+/** Pause after the last keystroke before the search term is applied. */
+const SEARCH_DEBOUNCE_MS = 350;
+/** Batches near-simultaneous filter changes (e.g. several checkbox clicks) into one request. */
+const FETCH_BATCH_MS = 150;
+
+/**
+ * Search box with local state: typing updates only this input; the term reaches
+ * redux (→ URL + API) once the user pauses, or immediately on Enter. Whitespace-only
+ * edits ("bm" → "bm ") never trigger a request.
+ */
+function DebouncedSearchInput({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (text: string) => void;
+}) {
+  const [text, setText] = useState(value);
+  // Follow external changes (Reset All, URL hydration, the other sidebar instance).
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setText(value);
+  }
+
+  const commitRef = useRef(onCommit);
+  useEffect(() => {
+    commitRef.current = onCommit;
+  });
+
+  useEffect(() => {
+    if (text.trim() === value.trim()) return;
+    const timer = setTimeout(() => commitRef.current(text.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [text, value]);
+
+  return (
+    <Input
+      type="search"
+      placeholder="e.g. BMW 3 Series, SUV"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && text.trim() !== value.trim()) commitRef.current(text.trim());
+      }}
+      aria-label="Search vehicles"
+      className="pl-10 rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-500"
+    />
+  );
+}
+
+/**
+ * Price slider that only commits when the thumb is released (or a key press
+ * ends), instead of firing a request for every pixel dragged.
+ */
+function PriceRangeFilter({
+  low,
+  high,
+  max,
+  unlimited,
+  onCommit,
+}: {
+  low: number;
+  high: number;
+  max: number;
+  unlimited: boolean;
+  onCommit: (range: [number, number]) => void;
+}) {
+  const [draft, setDraft] = useState<[number, number] | null>(null);
+  const [shownLow, shownHigh] = draft ?? [low, high];
+  const toRange = (val: number | readonly number[]): [number, number] =>
+    Array.isArray(val) ? [val[0], val[1]] : [val as number, val as number];
+
+  return (
+    <>
+      <Slider
+        value={[shownLow, shownHigh]}
+        onValueChange={(val) => setDraft(toRange(val))}
+        onValueCommitted={(val) => {
+          setDraft(null);
+          const [a, b] = toRange(val);
+          if (a !== low || b !== high) onCommit([a, b]);
+        }}
+        min={0}
+        max={max}
+        step={1000}
+        className="mb-4"
+      />
+      <div className="flex items-center gap-2 text-sm text-zinc-400">
+        <span>&pound;{shownLow.toLocaleString()}</span>
+        <span className="text-zinc-600">to</span>
+        <span>
+          &pound;{shownHigh.toLocaleString()}
+          {(draft ? shownHigh >= max : unlimited) && "+"}
+        </span>
+      </div>
+    </>
+  );
+}
+
+// --- Facet helpers ---
+
+interface OptionWithCount {
+  name: string;
+  /** undefined until facets have loaded */
+  count?: number;
+}
+
+/**
+ * Admin Settings define the option order; facet counts come from live stock.
+ * Values present in stock but missing from Settings are appended so nothing is hidden.
+ */
+function withCounts(options: string[], counts: FacetCount[] | undefined): OptionWithCount[] {
+  if (!counts) return options.map((name) => ({ name }));
+  const byName = new Map(counts.map((c) => [c.name.toLowerCase(), c.count]));
+  const merged: OptionWithCount[] = options.map((name) => ({
+    name,
+    count: byName.get(name.toLowerCase()) ?? 0,
+  }));
+  const known = new Set(options.map((o) => o.toLowerCase()));
+  for (const c of counts) if (!known.has(c.name.toLowerCase())) merged.push(c);
+  return merged;
+}
+
+/** Years available in stock (newest first), always including any year already selected. */
+function yearOptions(facets: VehicleFacets | null, selected: string[]): number[] {
+  const current = new Date().getFullYear();
+  const max = facets?.year.max ?? current;
+  const min = facets?.year.min ?? current - 5;
+  const years = new Set<number>();
+  for (let y = max; y >= min; y--) years.add(y);
+  for (const s of selected) if (s) years.add(parseInt(s, 10));
+  return [...years].filter((y) => !Number.isNaN(y)).sort((a, b) => b - a);
+}
+
+function CountBadge({ count }: { count?: number }) {
+  if (count === undefined) return null;
+  return <span className="ml-auto text-xs tabular-nums text-zinc-600">{count}</span>;
+}
+
+function CheckboxGroup({
+  title,
+  idPrefix,
+  options,
+  selected,
+  onToggle,
+}: {
+  title: string;
+  idPrefix: string;
+  options: OptionWithCount[];
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-white mb-3">{title}</h3>
+      <div className="space-y-2.5">
+        {options.map(({ name, count }) => {
+          const id = `${idPrefix}-${name}`;
+          const checked = selected.includes(name);
+          // Options with no matching stock are dimmed but stay clickable.
+          const empty = count === 0 && !checked;
+          return (
+            <div key={name} className="flex items-center gap-2.5">
+              <Checkbox
+                id={id}
+                checked={checked}
+                onCheckedChange={() => onToggle(name)}
+                className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
+              />
+              <Label
+                htmlFor={id}
+                className={`flex flex-1 items-center text-sm cursor-pointer ${
+                  empty ? "text-zinc-600" : "text-zinc-400"
+                }`}
+              >
+                {name}
+                <CountBadge count={count} />
+              </Label>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // --- Filter sidebar ---
 
 function FilterSidebar({ className = "" }: { className?: string }) {
   const dispatch = useAppDispatch();
   const filters = useAppSelector(selectFilters);
+  const makes = useAppSelector(selectMakes);
+  const fuelTypes = useAppSelector(selectFuelTypes);
+  const bodyTypes = useAppSelector(selectBodyTypes);
+  const transmissions = useAppSelector(selectTransmissions);
+  const facets = useAppSelector(selectVehicleFacets);
+  const sliderMax = useAppSelector(selectPriceSliderMax);
+
+  const makeOptions = withCounts(makes, facets?.makes);
+  const fuelOptions = withCounts(fuelTypes, facets?.fuelTypes);
+  const transmissionOptions = withCounts(transmissions, facets?.transmissions);
+  const bodyOptions = withCounts(bodyTypes, facets?.bodyTypes);
+  const years = yearOptions(facets, [filters.yearFrom, filters.yearTo]);
+
+  // A stored max at/above the slider top means "no limit".
+  const priceLow = Math.min(filters.priceRange[0], sliderMax);
+  const priceHigh = Math.min(filters.priceRange[1], sliderMax);
+  const priceUnlimited = filters.priceRange[1] >= sliderMax;
 
   return (
     <div className={className}>
@@ -148,11 +366,9 @@ function FilterSidebar({ className = "" }: { className?: string }) {
           </h3>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <Input
-              placeholder="e.g. BMW 3 Series, SUV"
+            <DebouncedSearchInput
               value={filters.search}
-              onChange={(e) => dispatch(setSearch(e.target.value))}
-              className="pl-10 rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-500"
+              onCommit={(text) => dispatch(setSearch(text))}
             />
           </div>
         </div>
@@ -171,42 +387,35 @@ function FilterSidebar({ className = "" }: { className?: string }) {
             </SelectTrigger>
             <SelectContent className="bg-surface border-white/10">
               <SelectItem value="all">Any Make</SelectItem>
-              {MAKES.map((make) => (
-                <SelectItem key={make} value={make.toLowerCase()}>
-                  {make}
+              {makeOptions.map(({ name, count }) => (
+                <SelectItem key={name} value={name.toLowerCase()}>
+                  <span className="flex w-full items-center gap-2">
+                    {name}
+                    {count !== undefined && (
+                      <span className="text-xs text-zinc-500">({count})</span>
+                    )}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        {/* Price Range */}
+        {/* Price Range — bounds come from the stock via GET /vehicles/facets */}
         <div>
           <h3 className="text-sm font-semibold text-white mb-3">
             Price Range
           </h3>
-          <Slider
-            value={filters.priceRange as unknown as number[]}
-            onValueChange={(val) =>
-              dispatch(
-                setPriceRange(
-                  Array.isArray(val) ? [val[0], val[1]] : [val, val],
-                ),
-              )
-            }
-            min={0}
-            max={150000}
-            step={1000}
-            className="mb-4"
+          <PriceRangeFilter
+            low={priceLow}
+            high={priceHigh}
+            max={sliderMax}
+            unlimited={priceUnlimited}
+            onCommit={(range) => dispatch(setPriceRange(range))}
           />
-          <div className="flex items-center gap-2 text-sm text-zinc-400">
-            <span>&pound;{filters.priceRange[0].toLocaleString()}</span>
-            <span className="text-zinc-600">to</span>
-            <span>&pound;{filters.priceRange[1].toLocaleString()}</span>
-          </div>
         </div>
 
-        {/* Year */}
+        {/* Year — range of model years in stock */}
         <div>
           <h3 className="text-sm font-semibold text-white mb-3">Year</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -221,7 +430,7 @@ function FilterSidebar({ className = "" }: { className?: string }) {
               </SelectTrigger>
               <SelectContent className="bg-surface border-white/10">
                 <SelectItem value="any">Any</SelectItem>
-                {[2020, 2021, 2022, 2023, 2024].map((year) => (
+                {years.map((year) => (
                   <SelectItem key={year} value={year.toString()}>
                     {year}
                   </SelectItem>
@@ -239,7 +448,7 @@ function FilterSidebar({ className = "" }: { className?: string }) {
               </SelectTrigger>
               <SelectContent className="bg-surface border-white/10">
                 <SelectItem value="any">Any</SelectItem>
-                {[2020, 2021, 2022, 2023, 2024].map((year) => (
+                {years.map((year) => (
                   <SelectItem key={year} value={year.toString()}>
                     {year}
                   </SelectItem>
@@ -249,76 +458,27 @@ function FilterSidebar({ className = "" }: { className?: string }) {
           </div>
         </div>
 
-        {/* Fuel Type */}
-        <div>
-          <h3 className="text-sm font-semibold text-white mb-3">Fuel Type</h3>
-          <div className="space-y-2.5">
-            {FUEL_TYPES.map((fuel) => (
-              <div key={fuel} className="flex items-center gap-2.5">
-                <Checkbox
-                  id={`fuel-${fuel}`}
-                  checked={filters.fuelTypes.includes(fuel)}
-                  onCheckedChange={() => dispatch(toggleFuelType(fuel))}
-                  className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
-                />
-                <Label
-                  htmlFor={`fuel-${fuel}`}
-                  className="text-sm text-zinc-400 cursor-pointer"
-                >
-                  {fuel}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Transmission */}
-        <div>
-          <h3 className="text-sm font-semibold text-white mb-3">
-            Transmission
-          </h3>
-          <div className="space-y-2.5">
-            {["Automatic", "Manual"].map((trans) => (
-              <div key={trans} className="flex items-center gap-2.5">
-                <Checkbox
-                  id={`trans-${trans}`}
-                  checked={filters.transmissions.includes(trans)}
-                  onCheckedChange={() => dispatch(toggleTransmission(trans))}
-                  className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
-                />
-                <Label
-                  htmlFor={`trans-${trans}`}
-                  className="text-sm text-zinc-400 cursor-pointer"
-                >
-                  {trans}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Body Type */}
-        <div>
-          <h3 className="text-sm font-semibold text-white mb-3">Body Type</h3>
-          <div className="space-y-2.5">
-            {BODY_TYPES.map((type) => (
-              <div key={type} className="flex items-center gap-2.5">
-                <Checkbox
-                  id={`body-${type}`}
-                  checked={filters.bodyTypes.includes(type)}
-                  onCheckedChange={() => dispatch(toggleBodyType(type))}
-                  className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
-                />
-                <Label
-                  htmlFor={`body-${type}`}
-                  className="text-sm text-zinc-400 cursor-pointer"
-                >
-                  {type}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </div>
+        <CheckboxGroup
+          title="Fuel Type"
+          idPrefix="fuel"
+          options={fuelOptions}
+          selected={filters.fuelTypes}
+          onToggle={(v) => dispatch(toggleFuelType(v))}
+        />
+        <CheckboxGroup
+          title="Transmission"
+          idPrefix="trans"
+          options={transmissionOptions}
+          selected={filters.transmissions}
+          onToggle={(v) => dispatch(toggleTransmission(v))}
+        />
+        <CheckboxGroup
+          title="Body Type"
+          idPrefix="body"
+          options={bodyOptions}
+          selected={filters.bodyTypes}
+          onToggle={(v) => dispatch(toggleBodyType(v))}
+        />
       </div>
     </div>
   );
@@ -337,7 +497,6 @@ export default function VehiclesPage() {
 function VehiclesContent() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const dispatch = useAppDispatch();
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const filters = useAppSelector(selectFilters);
@@ -360,24 +519,44 @@ function VehiclesContent() {
     }
   }, [searchParams, dispatch]);
 
-  // Sync redux state → URL (after hydration)
+  // Sync redux state → URL (after hydration). Uses the native History API, which
+  // Next.js integrates with useSearchParams, so changing a filter does NOT trigger
+  // a router navigation / server round trip like router.replace() would.
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
-    const params = filtersToSearchParams(filters, currentPage);
-    const qs = params.toString();
-    const target = qs ? `/vehicles?${qs}` : "/vehicles";
-    router.replace(target, { scroll: false });
-  }, [filters, currentPage, router]);
-
-  useEffect(() => {
-    if (status === "idle") {
-      dispatch(fetchVehicles());
+    const qs = filtersToSearchParams(filters, currentPage).toString();
+    const target = qs ? `?${qs}` : window.location.pathname;
+    if (window.location.search !== (qs ? `?${qs}` : "")) {
+      window.history.replaceState(window.history.state, "", target);
     }
-  }, [status, dispatch]);
+  }, [filters, currentPage]);
+
+  const error = useAppSelector(selectVehiclesError);
+
+  // ONE request per settled change: results + (only when filters changed) sidebar
+  // facets come back together. The search box and price slider already debounce/
+  // commit before touching redux, so this short delay just batches rapid clicks
+  // (e.g. ticking several checkboxes). Identical queries are skipped by the thunk
+  // and a superseded in-flight request is aborted.
+  useEffect(() => {
+    let request: { abort: () => void } | undefined;
+    const timer = setTimeout(() => {
+      request = dispatch(fetchVehicles());
+    }, FETCH_BATCH_MS);
+    return () => {
+      clearTimeout(timer);
+      request?.abort();
+    };
+  }, [filters, currentPage, dispatch]);
+
+  // Filter option lists (makes, fuel types, …) come from the admin Settings.
+  useEffect(() => {
+    dispatch(fetchSettings());
+  }, [dispatch]);
 
   const handlePageChange = useCallback(
     (page: number) => {
@@ -541,7 +720,21 @@ function VehiclesContent() {
               </div>
 
               {/* Vehicle Grid */}
-              {vehicles.length === 0 ? (
+              {status === "failed" && vehicles.length === 0 ? (
+                <div className="text-center py-20">
+                  <p className="text-zinc-400 text-lg mb-2">
+                    {error ?? "Could not load vehicles"}
+                  </p>
+                  <button
+                    onClick={() => dispatch(fetchVehicles({ force: true }))}
+                    className="text-orange hover:text-orange-light text-sm font-medium transition-colors"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : vehicles.length === 0 && status !== "succeeded" ? (
+                <div className="text-center py-20 text-zinc-500">Loading vehicles…</div>
+              ) : vehicles.length === 0 ? (
                 <div className="text-center py-20">
                   <p className="text-zinc-400 text-lg mb-2">
                     No vehicles match your filters
@@ -573,23 +766,45 @@ function VehiclesContent() {
                     >
                       {/* Image */}
                       <Link
-                        href={`/vehicles/${vehicle.id}`}
+                        href={vehiclePath(vehicle)}
                         className={`relative overflow-hidden block ${viewMode === "list" ? "w-72 shrink-0" : "aspect-[16/10]"}`}
                       >
-                        <img
-                          src={vehicle.image}
-                          alt={`${vehicle.make} ${vehicle.model}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                        />
+                        {vehicle.image ? (
+                          <img
+                            src={vehicle.image}
+                            alt={`${vehicle.make} ${vehicle.model}`}
+                            loading={i < 3 ? "eager" : "lazy"}
+                            className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ${
+                              vehicle.vehicleStatus === "sold" ? "grayscale-[60%]" : ""
+                            }`}
+                          />
+                        ) : (
+                          <div className="w-full h-full min-h-40 flex items-center justify-center bg-white/5 text-zinc-600 text-sm">
+                            Image coming soon
+                          </div>
+                        )}
                         <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
-                        <Badge className="absolute top-3 left-3 bg-orange/90 text-white border-0 rounded-full text-xs">
-                          {vehicle.year}
-                        </Badge>
+                        <div className="absolute top-3 left-3 flex gap-2">
+                          <Badge className="bg-orange/90 text-white border-0 rounded-full text-xs">
+                            {vehicle.year}
+                          </Badge>
+                          {vehicle.featured && vehicle.vehicleStatus !== "sold" && (
+                            <Badge className="bg-black/60 text-orange border border-orange/30 rounded-full text-xs backdrop-blur-sm">
+                              Featured
+                            </Badge>
+                          )}
+                        </div>
+                        <SoldOutOverlay sold={vehicle.vehicleStatus === "sold"} size={viewMode === "list" ? "sm" : "md"} />
+                        {vehicle.salePrice && vehicle.vehicleStatus !== "sold" ? (
+                          <Badge className="absolute top-3 right-3 bg-emerald-500/90 text-white border-0 rounded-full text-xs">
+                            Save &pound;{(vehicle.price - vehicle.salePrice).toLocaleString()}
+                          </Badge>
+                        ) : null}
                       </Link>
 
                       {/* Content */}
                       <div className="p-5 flex-1">
-                        <Link href={`/vehicles/${vehicle.id}`}>
+                        <Link href={vehiclePath(vehicle)}>
                           <h3 className="font-semibold text-white text-lg hover:text-orange transition-colors">
                             {vehicle.make} {vehicle.model}
                           </h3>
@@ -607,27 +822,44 @@ function VehiclesContent() {
                             <Gauge className="w-3.5 h-3.5" />
                             {vehicle.transmission}
                           </span>
-                          <span className="flex items-center gap-1.5">
-                            <Zap className="w-3.5 h-3.5" />
-                            {vehicle.horsepower} hp
-                          </span>
+                          {vehicle.horsepower > 0 && (
+                            <span className="flex items-center gap-1.5">
+                              <Zap className="w-3.5 h-3.5" />
+                              {vehicle.horsepower} hp
+                            </span>
+                          )}
                         </div>
 
                         <p className="text-xs text-zinc-500 mt-2">
                           {vehicle.mileage.toLocaleString()} miles
+                          {vehicle.bodyType && <> &middot; {vehicle.bodyType}</>}
+                          {vehicle.vehicleLocation && <> &middot; {vehicle.vehicleLocation}</>}
                         </p>
 
                         <div className="flex items-end justify-between mt-4 pt-4 border-t border-white/5">
                           <div>
-                            <p className="text-xl font-bold text-white">
-                              &pound;{vehicle.price.toLocaleString()}
-                            </p>
-                            <p className="text-xs text-zinc-500">
-                              &pound;{vehicle.monthlyPrice}/mo*
-                            </p>
+                            {vehicle.salePrice ? (
+                              <p className="flex items-baseline gap-2">
+                                <span className="text-xl font-bold text-white">
+                                  &pound;{vehicle.salePrice.toLocaleString()}
+                                </span>
+                                <span className="text-sm text-zinc-500 line-through">
+                                  &pound;{vehicle.price.toLocaleString()}
+                                </span>
+                              </p>
+                            ) : (
+                              <p className="text-xl font-bold text-white">
+                                &pound;{vehicle.price.toLocaleString()}
+                              </p>
+                            )}
+                            {vehicle.monthlyPrice > 0 && (
+                              <p className="text-xs text-zinc-500">
+                                &pound;{vehicle.monthlyPrice.toLocaleString()}/mo*
+                              </p>
+                            )}
                           </div>
                           <div className="flex gap-2">
-                            <Link href={`/vehicles/${vehicle.id}`}>
+                            <Link href={vehiclePath(vehicle)}>
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -636,15 +868,17 @@ function VehiclesContent() {
                                 Details
                               </Button>
                             </Link>
-                            <Link href="/contact">
-                              <Button
-                                size="sm"
-                                className="rounded-full btn-gradient text-xs gap-1"
-                              >
-                                Enquire
-                                <ArrowRight className="w-3 h-3" />
-                              </Button>
-                            </Link>
+                            {vehicle.vehicleStatus !== "sold" && (
+                              <Link href={vehicleEnquiryHref(vehicle, defaultIntentFor(vehicle))}>
+                                <Button
+                                  size="sm"
+                                  className="rounded-full btn-gradient text-xs gap-1"
+                                >
+                                  {vehicle.enableRequestPrice ? "Request Price" : "Enquire"}
+                                  <ArrowRight className="w-3 h-3" />
+                                </Button>
+                              </Link>
+                            )}
                           </div>
                         </div>
                       </div>

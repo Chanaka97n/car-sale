@@ -1,8 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
-import { selectUsers, addUser, updateUser, deleteUser } from "@/redux/admin/users/usersIndex";
+import {
+  selectUsers,
+  selectUsersStatus,
+  selectTemporaryCredentials,
+  fetchUsers,
+  addUser,
+  updateUser,
+  deleteUser,
+  clearTemporaryCredentials,
+} from "@/redux/admin/users/usersIndex";
+import { AdminAlert } from "@/components/admin/admin-alert";
 import type { User } from "@/redux/admin/users/usersIndex";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,12 +32,22 @@ import { UserFormModal, emptyUserForm, type UserForm } from "@/components/admin/
 export default function AdminUsersPage() {
   const dispatch = useAppDispatch();
   const users = useAppSelector(selectUsers);
+  const loadStatus = useAppSelector(selectUsersStatus);
+  const loadError = useAppSelector((s) => s.users.error);
+  const tempCredentials = useAppSelector(selectTemporaryCredentials);
+
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  useEffect(() => {
+    dispatch(fetchUsers({ force: true }));
+  }, [dispatch]);
 
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [form, setForm] = useState<UserForm>(emptyUserForm);
+  /** What the add/edit modal starts from (validation + state live in react-hook-form). */
+  const [initialValues, setInitialValues] = useState<UserForm>(emptyUserForm);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
 
@@ -37,30 +57,34 @@ export default function AdminUsersPage() {
       u.email.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleAdd = () => {
-    dispatch(addUser(form));
-    setForm(emptyUserForm);
+  // Rejections propagate to the modal, which shows them as a form-level error.
+  const handleAdd = async (values: UserForm) => {
+    await dispatch(addUser(values)).unwrap();
     setAddOpen(false);
   };
 
-  const handleEdit = () => {
+  const handleEdit = async (values: UserForm) => {
     if (!editingUser) return;
-    dispatch(updateUser({ ...editingUser, ...form }));
+    await dispatch(updateUser({ ...editingUser, ...values })).unwrap();
     setEditOpen(false);
     setEditingUser(null);
-    setForm(emptyUserForm);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deletingUser) return;
-    dispatch(deleteUser(deletingUser.id));
+    setPageError(null);
+    try {
+      await dispatch(deleteUser(deletingUser.id)).unwrap();
+    } catch (message) {
+      setPageError(String(message));
+    }
     setDeleteOpen(false);
     setDeletingUser(null);
   };
 
   const openEdit = (user: User) => {
     setEditingUser(user);
-    setForm({ name: user.name, email: user.email, role: user.role, status: user.status });
+    setInitialValues({ name: user.name, email: user.email, role: user.role, status: user.status });
     setEditOpen(true);
   };
 
@@ -97,6 +121,23 @@ export default function AdminUsersPage() {
         ))}
       </div>
 
+      {tempCredentials && (
+        <AdminAlert variant="success" onDismiss={() => dispatch(clearTemporaryCredentials())}>
+          User <span className="font-medium text-white">{tempCredentials.email}</span> created.
+          Temporary password:{" "}
+          <code className="rounded bg-black/30 px-1.5 py-0.5 font-mono text-white select-all">
+            {tempCredentials.password}
+          </code>{" "}
+          — share it securely; it won&apos;t be shown again.
+        </AdminAlert>
+      )}
+
+      {(pageError || loadError) && (
+        <AdminAlert onDismiss={pageError ? () => setPageError(null) : undefined}>
+          {pageError ?? loadError}
+        </AdminAlert>
+      )}
+
       <div className="bg-surface rounded-xl border border-white/5 overflow-hidden">
         <div className="flex items-center justify-between gap-4 p-4 border-b border-white/5">
           <div className="relative max-w-sm flex-1">
@@ -109,7 +150,7 @@ export default function AdminUsersPage() {
             />
           </div>
           <Button
-            onClick={() => { setForm(emptyUserForm); setAddOpen(true); }}
+            onClick={() => { setInitialValues(emptyUserForm); setAddOpen(true); }}
             className="btn-gradient gap-2 shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -169,7 +210,7 @@ export default function AdminUsersPage() {
             {filtered.length === 0 && (
               <TableRow className="border-white/5">
                 <TableCell colSpan={6} className="text-center text-zinc-500 py-8">
-                  No users found
+                  {loadStatus === "loading" ? "Loading users…" : "No users found"}
                 </TableCell>
               </TableRow>
             )}
@@ -180,8 +221,7 @@ export default function AdminUsersPage() {
       <UserFormModal
         open={addOpen}
         onOpenChange={setAddOpen}
-        form={form}
-        setForm={setForm}
+        initialValues={initialValues}
         onSubmit={handleAdd}
         mode="add"
       />
@@ -189,8 +229,7 @@ export default function AdminUsersPage() {
       <UserFormModal
         open={editOpen}
         onOpenChange={setEditOpen}
-        form={form}
-        setForm={setForm}
+        initialValues={initialValues}
         onSubmit={handleEdit}
         mode="edit"
       />

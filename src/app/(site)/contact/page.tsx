@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Phone,
@@ -12,6 +12,7 @@ import {
   ArrowRight,
   Send,
   ChevronDown,
+  CheckCircle2,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -36,6 +37,24 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { useAppSelector, useAppDispatch } from "@/redux/hooks";
+import { addEnquiry } from "@/redux/admin/enquiries/enquiriesIndex";
+import { fetchAllVehicles, selectAllVehicles } from "@/redux/vehicles/vehiclesIndex";
+import { format } from "date-fns";
+import { Controller, useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { FieldError, FormError, fieldAria } from "@/components/forms/form-errors";
+import {
+  testDriveBookingDefaults,
+  testDriveBookingSchema,
+  type TestDriveBookingValues,
+} from "@/lib/validation";
+
+/** "YYYY-MM-DD" (form value) → local Date for the calendar. */
+function isoToDate(value: string): Date | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : undefined;
+}
 
 const contactMethods = [
   {
@@ -119,9 +138,56 @@ const enquiryTypes = [
 ];
 
 export default function ContactPage() {
-  const [date, setDate] = useState<Date | undefined>(undefined);
+  const dispatch = useAppDispatch();
+  const allVehicles = useAppSelector(selectAllVehicles);
+
+  // Vehicle picker for the test-drive form.
+  useEffect(() => {
+    dispatch(fetchAllVehicles());
+  }, [dispatch]);
+
   const [dateOpen, setDateOpen] = useState(false);
   const [disableBefore, setDisableBefore] = useState<Date | undefined>(undefined);
+  const [bookingSubmitted, setBookingSubmitted] = useState(false);
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<TestDriveBookingValues>({
+    resolver: yupResolver(testDriveBookingSchema),
+    defaultValues: testDriveBookingDefaults,
+    mode: "onTouched",
+  });
+
+  const handleBookingSubmit = handleSubmit(async (values) => {
+    const selectedVehicle = allVehicles.find((v) => v.id === values.vehicle);
+    try {
+      await dispatch(
+        addEnquiry({
+          type: "test-drive",
+          firstName: values.firstName,
+          lastName: values.lastName,
+          email: values.email,
+          phone: values.phone,
+          message: values.message || "I'd like to book a test drive.",
+          vehicleId: values.vehicle || undefined,
+          vehicleLabel: selectedVehicle
+            ? `${selectedVehicle.make} ${selectedVehicle.model} ${selectedVehicle.variant}`
+            : undefined,
+          preferredDate: values.preferredDate || undefined,
+          preferredTime: values.time || undefined,
+          marketingConsent: values.marketing,
+        }),
+      ).unwrap();
+      setBookingSubmitted(true);
+    } catch (message) {
+      setError("root.server", { message: String(message) });
+    }
+  });
 
   return (
     <>
@@ -147,24 +213,28 @@ export default function ContactPage() {
               to help.
             </p>
             <div className="flex gap-4 mt-8">
-              <Button className="btn-gradient rounded-full px-8 gap-2">
-                Book a Test Drive
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="outline"
-                className="rounded-full border-white/20 text-white hover:bg-white/5 gap-2"
-              >
-                Contact Our Team
-                <ArrowRight className="w-4 h-4" />
-              </Button>
+              <a href="#booking">
+                <Button className="btn-gradient rounded-full px-8 gap-2">
+                  Book a Test Drive
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </a>
+              <a href="#contact-team">
+                <Button
+                  variant="outline"
+                  className="rounded-full border-white/20 text-white hover:bg-white/5 gap-2"
+                >
+                  Contact Our Team
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </a>
             </div>
           </motion.div>
         </div>
       </section>
 
       {/* Booking Form */}
-      <section id="booking" className="py-16 relative">
+      <section id="booking" className="py-16 relative scroll-mt-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -201,166 +271,258 @@ export default function ContactPage() {
                   time that suits you.
                 </p>
 
-                <form className="space-y-5">
+                {bookingSubmitted ? (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-2">Booking Received!</h3>
+                    <p className="text-zinc-400">
+                      We&apos;ll confirm your test drive shortly.
+                    </p>
+                    <Button
+                      className="mt-6 btn-gradient rounded-full px-8"
+                      onClick={() => {
+                        setBookingSubmitted(false);
+                        reset(testDriveBookingDefaults);
+                      }}
+                    >
+                      Book Another
+                    </Button>
+                  </div>
+                ) : (
+                <form className="space-y-5" onSubmit={handleBookingSubmit} noValidate>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-vehicle" className="text-xs text-zinc-400 mb-1.5 block">
                         Vehicle (Optional)
                       </Label>
-                      <Select>
-                        <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white">
-                          <SelectValue placeholder="Select a Vehicle" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-surface border-white/10">
-                          <SelectItem value="merc-s">
-                            Mercedes S-Class
-                          </SelectItem>
-                          <SelectItem value="bmw-x3">BMW X3</SelectItem>
-                          <SelectItem value="audi-a4">Audi A4</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Controller
+                        control={control}
+                        name="vehicle"
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={(val) => field.onChange(val ?? "")}>
+                            <SelectTrigger
+                              id="booking-vehicle"
+                              ref={field.ref}
+                              className="rounded-xl bg-white/5 border-white/10 text-white"
+                            >
+                              <SelectValue placeholder="Select a Vehicle" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-surface border-white/10">
+                              {allVehicles.filter((v) => v.vehicleStatus !== "sold").map((v) => (
+                                <SelectItem key={v.id} value={v.id}>
+                                  {v.make} {v.model} {v.variant}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
                     </div>
                     <div>
                       <Label className="text-xs text-zinc-400 mb-1.5 block">
                         Preferred Date
                       </Label>
-                      <Popover open={dateOpen} onOpenChange={(open) => {
-                          if (open) setDisableBefore(new Date());
-                          setDateOpen(open);
-                        }}>
-                        <PopoverTrigger
-                          className="flex h-10 w-full items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3 text-sm text-white cursor-pointer hover:bg-white/10 transition-colors"
-                        >
-                          <span className={date ? "text-white" : "text-zinc-500"}>
-                            {date
-                              ? date.toLocaleDateString("en-GB", {
-                                  day: "numeric",
-                                  month: "long",
-                                  year: "numeric",
-                                })
-                              : "Pick a date"}
-                          </span>
-                          <CalendarIcon className="w-4 h-4 text-zinc-500" />
-                        </PopoverTrigger>
-                        <PopoverContent
-                          align="start"
-                          className="w-auto p-0 bg-surface border-white/10"
-                        >
-                          <Calendar
-                            mode="single"
-                            selected={date}
-                            onSelect={(d) => {
-                              setDate(d ?? undefined);
-                              setDateOpen(false);
-                            }}
-                            disabled={disableBefore ? { before: disableBefore } : undefined}
-                            className="[--cell-size:--spacing(8)]"
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <Controller
+                        control={control}
+                        name="preferredDate"
+                        render={({ field }) => {
+                          const date = isoToDate(field.value);
+                          return (
+                            <Popover open={dateOpen} onOpenChange={(open) => {
+                                if (open) setDisableBefore(new Date());
+                                setDateOpen(open);
+                                if (!open) field.onBlur();
+                              }}>
+                              <PopoverTrigger
+                                {...fieldAria("booking-date", errors.preferredDate?.message)}
+                                className="flex h-10 w-full items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3 text-sm text-white cursor-pointer hover:bg-white/10 transition-colors aria-invalid:border-red-500/60"
+                              >
+                                <span className={date ? "text-white" : "text-zinc-500"}>
+                                  {date
+                                    ? date.toLocaleDateString("en-GB", {
+                                        day: "numeric",
+                                        month: "long",
+                                        year: "numeric",
+                                      })
+                                    : "Pick a date"}
+                                </span>
+                                <CalendarIcon className="w-4 h-4 text-zinc-500" />
+                              </PopoverTrigger>
+                              <PopoverContent
+                                align="start"
+                                className="w-auto p-0 bg-surface border-white/10"
+                              >
+                                <Calendar
+                                  mode="single"
+                                  selected={date}
+                                  onSelect={(d) => {
+                                    // Local calendar date — toISOString() would shift it to UTC.
+                                    field.onChange(d ? format(d, "yyyy-MM-dd") : "");
+                                    setDateOpen(false);
+                                  }}
+                                  disabled={disableBefore ? { before: disableBefore } : undefined}
+                                  className="[--cell-size:--spacing(8)]"
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          );
+                        }}
+                      />
+                      <FieldError id="booking-date-error" message={errors.preferredDate?.message} />
                     </div>
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-time" className="text-xs text-zinc-400 mb-1.5 block">
                         Preferred Time
                       </Label>
-                      <Select>
-                        <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white">
-                          <SelectValue placeholder="Select a Time" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-surface border-white/10">
-                          {[
-                            "9:00 AM",
-                            "10:00 AM",
-                            "11:00 AM",
-                            "12:00 PM",
-                            "1:00 PM",
-                            "2:00 PM",
-                            "3:00 PM",
-                            "4:00 PM",
-                            "5:00 PM",
-                          ].map((time) => (
-                            <SelectItem key={time} value={time}>
-                              {time}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Controller
+                        control={control}
+                        name="time"
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={(val) => field.onChange(val ?? "")}>
+                            <SelectTrigger
+                              id="booking-time"
+                              ref={field.ref}
+                              className="rounded-xl bg-white/5 border-white/10 text-white"
+                            >
+                              <SelectValue placeholder="Select a Time" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-surface border-white/10">
+                              {[
+                                "9:00 AM",
+                                "10:00 AM",
+                                "11:00 AM",
+                                "12:00 PM",
+                                "1:00 PM",
+                                "2:00 PM",
+                                "3:00 PM",
+                                "4:00 PM",
+                                "5:00 PM",
+                              ].map((time) => (
+                                <SelectItem key={time} value={time}>
+                                  {time}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-firstName" className="text-xs text-zinc-400 mb-1.5 block">
                         First Name *
                       </Label>
                       <Input
+                        id="booking-firstName"
+                        autoComplete="given-name"
                         placeholder="e.g. James"
+                        {...register("firstName")}
+                        {...fieldAria("booking-firstName", errors.firstName?.message)}
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
+                      <FieldError id="booking-firstName-error" message={errors.firstName?.message} />
                     </div>
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-lastName" className="text-xs text-zinc-400 mb-1.5 block">
                         Last Name *
                       </Label>
                       <Input
+                        id="booking-lastName"
+                        autoComplete="family-name"
                         placeholder="e.g. Mitchell"
+                        {...register("lastName")}
+                        {...fieldAria("booking-lastName", errors.lastName?.message)}
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
+                      <FieldError id="booking-lastName-error" message={errors.lastName?.message} />
                     </div>
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-email" className="text-xs text-zinc-400 mb-1.5 block">
                         Email Address *
                       </Label>
                       <Input
+                        id="booking-email"
                         type="email"
+                        autoComplete="email"
                         placeholder="e.g. james@email.com"
+                        {...register("email")}
+                        {...fieldAria("booking-email", errors.email?.message)}
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
+                      <FieldError id="booking-email-error" message={errors.email?.message} />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-phone" className="text-xs text-zinc-400 mb-1.5 block">
                         Phone Number *
                       </Label>
                       <Input
+                        id="booking-phone"
                         type="tel"
+                        autoComplete="tel"
                         placeholder="e.g. 07700 900123"
+                        {...register("phone")}
+                        {...fieldAria("booking-phone", errors.phone?.message)}
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
+                      <FieldError id="booking-phone-error" message={errors.phone?.message} />
                     </div>
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-message" className="text-xs text-zinc-400 mb-1.5 block">
                         Additional Message (Optional)
                       </Label>
                       <Input
+                        id="booking-message"
                         placeholder="Any specific vehicle, features or questions?"
+                        {...register("message")}
+                        {...fieldAria("booking-message", errors.message?.message)}
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
+                      <FieldError id="booking-message-error" message={errors.message?.message} />
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-2.5">
-                    <Checkbox
-                      id="marketing"
-                      className="mt-0.5 border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
-                    />
-                    <Label
-                      htmlFor="marketing"
-                      className="text-xs text-zinc-400 leading-relaxed cursor-pointer"
-                    >
-                      I&apos;d like to receive vehicle updates, offers and news
-                      from Apex Select Automotive. You can unsubscribe at any time.
-                    </Label>
-                  </div>
+                  <Controller
+                    control={control}
+                    name="marketing"
+                    render={({ field }) => (
+                      <div className="flex items-start gap-2.5">
+                        <Checkbox
+                          id="marketing"
+                          checked={field.value}
+                          onCheckedChange={(checked) => field.onChange(checked === true)}
+                          className="mt-0.5 border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
+                        />
+                        <Label
+                          htmlFor="marketing"
+                          className="text-xs text-zinc-400 leading-relaxed cursor-pointer"
+                        >
+                          I&apos;d like to receive vehicle updates, offers and news
+                          from Apex Select Automotive. You can unsubscribe at any time.
+                        </Label>
+                      </div>
+                    )}
+                  />
 
-                  <Button className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold">
+                  <FormError message={errors.root?.server?.message} />
+
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold"
+                  >
                     <Send className="w-4 h-4" />
-                    Book My Test Drive
+                    {isSubmitting ? "Sending…" : "Book My Test Drive"}
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </form>
+                )}
               </div>
             </div>
           </motion.div>
@@ -451,7 +613,7 @@ export default function ContactPage() {
       </section>
 
       {/* Contact Methods */}
-      <section className="py-16 bg-surface/50">
+      <section id="contact-team" className="py-16 bg-surface/50 scroll-mt-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {contactMethods.map((method, i) => (

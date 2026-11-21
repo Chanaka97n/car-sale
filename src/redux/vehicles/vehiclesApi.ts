@@ -1,0 +1,232 @@
+import {
+  api,
+  fetchAllPages,
+  queryKey,
+  TtlCache,
+  withoutNulls,
+  type Paginated,
+  type Query,
+} from "@/lib/api/client";
+import type {
+  Vehicle,
+  VehicleFacets,
+  VehicleFilters,
+  VehicleInput,
+  VehiclesState,
+} from "./vehiclesTypes";
+import { initialFilters } from "./vehiclesTypes";
+
+/** API rows have `null` for empty columns and extra timestamps; normalise to the frontend type. */
+export function toVehicle(raw: Vehicle & { createdAt?: string; updatedAt?: string }): Vehicle {
+  const v = withoutNulls(raw);
+  const images = v.images?.length ? v.images : v.image ? [v.image] : [];
+  return { ...v, images, image: v.image || images[0] || "" };
+}
+
+const PRICE_STEP = 5000;
+
+/**
+ * Upper end of the price slider: the most expensive car rounded up to the next
+ * £5k. Falls back to the static default until facets have loaded.
+ */
+export function priceSliderMax(facets: VehicleFacets | null): number {
+  if (!facets || facets.price.max <= 0) return initialFilters.priceRange[1];
+  return Math.max(PRICE_STEP, Math.ceil(facets.price.max / PRICE_STEP) * PRICE_STEP);
+}
+
+/**
+ * Maps the vehicles-page filter state to GET /vehicles query params.
+ * A max price at (or beyond) the slider's top end means "no limit" and isn't sent.
+ */
+export function filtersToQuery(
+  filters: VehicleFilters,
+  page: number,
+  limit: number,
+  priceCeiling: number = initialFilters.priceRange[1],
+): Query {
+  const [minPrice, maxPrice] = filters.priceRange;
+  return {
+    search: filters.search.trim() || undefined,
+    make: filters.make || undefined,
+    minPrice: minPrice > 0 ? minPrice : undefined,
+    maxPrice: maxPrice < priceCeiling ? maxPrice : undefined,
+    yearFrom: filters.yearFrom || undefined,
+    yearTo: filters.yearTo || undefined,
+    fuelTypes: filters.fuelTypes,
+    transmissions: filters.transmissions,
+    bodyTypes: filters.bodyTypes,
+    sortBy: filters.sortBy,
+    page,
+    limit,
+  };
+}
+
+/** Server-managed fields; the API rejects unknown properties on create/update. */
+const READ_ONLY_FIELDS = new Set(["id", "image", "createdAt", "updatedAt"]);
+
+/** Same filters as the listing, minus paging and sort (GET /vehicles/facets). */
+export function filtersToFacetsQuery(filters: VehicleFilters, priceCeiling?: number): Query {
+  const query = filtersToQuery(filters, 1, 1, priceCeiling);
+  delete query.page;
+  delete query.limit;
+  delete query.sortBy;
+  return query;
+}
+
+/**
+ * The list + facets queries for the current listing state, with canonical keys
+ * used to skip duplicate requests and to decide whether facets need refreshing
+ * (they depend on filters only, not on page or sort).
+ */
+export function listingQueries(
+  s: Pick<VehiclesState, "filters" | "currentPage" | "pageSize" | "facets">,
+) {
+  const ceiling = priceSliderMax(s.facets);
+  const listQuery = filtersToQuery(s.filters, s.currentPage, s.pageSize, ceiling);
+  return {
+    listQuery,
+    listKey: queryKey(listQuery),
+    facetsKey: queryKey(filtersToFacetsQuery(s.filters, ceiling)),
+  };
+}
+
+export interface ListingResult extends Paginated<Vehicle> {
+  facets?: VehicleFacets;
+}
+
+/** Recent listing responses (60 s, 50 entries). Cleared on any admin vehicle change. */
+const listingCache = new TtlCache<ListingResult>(60_000, 50);
+
+function afterMutation<T>(result: T): T {
+  listingCache.clear();
+  return result;
+}
+
+/** Strips fields the API doesn't accept on create/update. */
+function toBody(input: Partial<VehicleInput> & { id?: string }, { clearEmpty = false } = {}) {
+  // On update, `undefined` means "cleared in the form" → send null so the column is emptied.
+  return Object.fromEntries(
+    Object.entries(input)
+      .filter(([k]) => !READ_ONLY_FIELDS.has(k))
+      .map(([k, v]) => [k, v === undefined && clearEmpty ? null : v])
+      .filter(([, v]) => v !== undefined && !(typeof v === "number" && Number.isNaN(v))),
+  );
+}
+
+type ApiVehicle = Vehicle & { createdAt?: string; updatedAt?: string };
+
+/**
+ * Backend: modules/vehicles/vehicles.controller.ts (public)
+ *          modules/vehicles/admin-vehicles.controller.ts (admin)
+ *          modules/uploads/uploads.controller.ts (images)
+ */
+export const vehiclesApi = {
+  // ── Public ────────────────────────────────────────
+  list: async (query: Query, signal?: AbortSignal) => {
+    const res = await api.get<Paginated<ApiVehicle>>("/vehicles", query, { auth: false, signal });
+    return { ...res, data: res.data.map(toVehicle) };
+  },
+
+  /**
+   * Public listing page in ONE request: GET /vehicles[?includeFacets=true].
+   * Served from the short-lived cache when the same query was just fetched.
+   */
+  search: async (
+    query: Query,
+    {
+      withFacets = false,
+      fresh = false,
+      signal,
+    }: { withFacets?: boolean; fresh?: boolean; signal?: AbortSignal } = {},
+  ): Promise<ListingResult> => {
+    const key = queryKey(query);
+    const hit = fresh ? undefined : listingCache.get(key);
+    if (hit && (!withFacets || hit.facets)) return hit;
+
+    const res = await api.get<Paginated<ApiVehicle> & { facets?: VehicleFacets }>(
+      "/vehicles",
+      { ...query, includeFacets: withFacets || undefined },
+      { auth: false, signal },
+    );
+    const result: ListingResult = {
+      data: res.data.map(toVehicle),
+      meta: res.meta,
+      facets: res.facets ?? hit?.facets,
+    };
+    listingCache.set(key, result);
+    return result;
+  },
+
+  /** Drop cached listing responses (call after creating/editing/deleting stock). */
+  invalidateCache: () => listingCache.clear(),
+
+  /** Filter sidebar bounds + counts. Takes the same filters as `list` (paging/sort ignored). */
+  facets: (query: Query, signal?: AbortSignal) =>
+    api.get<VehicleFacets>("/vehicles/facets", query, { auth: false, signal }),
+
+  listAll: async (query: Query = {}) =>
+    (await fetchAllPages<ApiVehicle>("/vehicles", { sortBy: "newest", ...query })).map(toVehicle),
+
+  featured: async (limit = 6) =>
+    (await api.get<ApiVehicle[]>("/vehicles/featured", { limit }, { auth: false })).map(toVehicle),
+
+  get: async (id: string) => toVehicle(await api.get<ApiVehicle>(`/vehicles/${id}`, undefined, { auth: false })),
+
+  similar: async (id: string) =>
+    (await api.get<ApiVehicle[]>(`/vehicles/${id}/similar`, undefined, { auth: false })).map(toVehicle),
+
+  // ── Admin ─────────────────────────────────────────
+  adminList: async (query: Query) => {
+    const res = await api.get<Paginated<ApiVehicle>>("/admin/vehicles", query);
+    return { ...res, data: res.data.map(toVehicle) };
+  },
+
+  adminGet: async (id: string) => toVehicle(await api.get<ApiVehicle>(`/admin/vehicles/${id}`)),
+
+  // Every mutation clears the listing cache so the public listing never shows stale stock.
+  create: async (input: VehicleInput) =>
+    afterMutation(toVehicle(await api.post<ApiVehicle>("/admin/vehicles", toBody(input)))),
+
+  update: async (id: string, input: Partial<VehicleInput>) =>
+    afterMutation(
+      toVehicle(
+        await api.patch<ApiVehicle>(`/admin/vehicles/${id}`, toBody(input, { clearEmpty: true })),
+      ),
+    ),
+
+  remove: async (id: string) => afterMutation(await api.delete(`/admin/vehicles/${id}`)),
+
+  setFeatured: async (id: string, featured: boolean) =>
+    afterMutation(
+      toVehicle(await api.patch<ApiVehicle>(`/admin/vehicles/${id}/featured/${featured}`)),
+    ),
+
+  setStatus: async (id: string, status: "sold" | "unsold") =>
+    afterMutation(
+      toVehicle(await api.patch<ApiVehicle>(`/admin/vehicles/${id}/status/${status}`)),
+    ),
+
+  /** POST /admin/uploads/images (multipart, field `files`) → public URLs. */
+  uploadImages: async (files: Blob[]) => {
+    const form = new FormData();
+    files.forEach((file, i) => {
+      const name = file instanceof File ? file.name : `image-${i}.${file.type.split("/")[1] ?? "jpg"}`;
+      form.append("files", file, name);
+    });
+    return (await api.post<{ urls: string[] }>("/admin/uploads/images", form)).urls;
+  },
+};
+
+/**
+ * The vehicle form keeps newly picked images as base64 `data:` URLs.
+ * Upload those in one request and swap in the returned URLs, preserving order.
+ */
+export async function uploadPendingImages(images: string[] = []): Promise<string[]> {
+  const pending = images.filter((src) => src.startsWith("data:"));
+  if (!pending.length) return images;
+
+  const blobs = await Promise.all(pending.map((src) => fetch(src).then((r) => r.blob())));
+  const urls = await vehiclesApi.uploadImages(blobs);
+  const replacements = new Map(pending.map((src, i) => [src, urls[i]]));
+  return images.map((src) => replacements.get(src) ?? src);
+}

@@ -1,5 +1,6 @@
 export type { Vehicle } from "@/redux/vehicles/vehiclesIndex";
-export { mockVehicles as vehicles, MAKES as makes, BODY_TYPES as bodyTypes, FUEL_TYPES as fuelTypes } from "@/redux/vehicles/vehiclesIndex";
+// Vehicle stock and dropdown lists now come from the API (see src/redux and src/lib/api).
+export { MAKES as makes, BODY_TYPES as bodyTypes, FUEL_TYPES as fuelTypes } from "@/redux/vehicles/vehiclesIndex";
 
 export const testimonials = [
   {

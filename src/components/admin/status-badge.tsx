@@ -13,6 +13,9 @@ type BadgeVariant =
   | "electric"
   | "automatic"
   | "manual"
+  | "info"
+  | "success"
+  | "warning"
   | "default";
 
 const variantStyles: Record<BadgeVariant, string> = {
@@ -28,6 +31,9 @@ const variantStyles: Record<BadgeVariant, string> = {
   electric: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   automatic: "bg-purple-500/10 text-purple-400 border-purple-500/20",
   manual: "bg-zinc-500/10 text-zinc-300 border-zinc-500/20",
+  info: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  success: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  warning: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   default: "bg-secondary text-secondary-foreground border-transparent",
 };
 
@@ -44,6 +50,9 @@ const dotStyles: Record<BadgeVariant, string> = {
   electric: "bg-blue-400",
   automatic: "bg-purple-400",
   manual: "bg-zinc-400",
+  info: "bg-blue-400",
+  success: "bg-emerald-400",
+  warning: "bg-amber-400",
   default: "bg-zinc-400",
 };
 

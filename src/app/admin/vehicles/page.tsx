@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
 import {
   addVehicle,
   updateVehicle,
   deleteVehicle,
+  fetchAllVehicles,
+  selectAllVehicles,
+  selectAllVehiclesStatus,
+  setVehicleStatus,
 } from "@/redux/vehicles/vehiclesIndex";
+import { AdminAlert } from "@/components/admin/admin-alert";
+import { Switch } from "@/components/ui/switch";
+import { SoldOutOverlay } from "@/components/vehicles/sold-out-stamp";
 import type { Vehicle } from "@/redux/vehicles/vehiclesIndex";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,14 +40,23 @@ const PAGE_SIZE = 10;
 
 export default function AdminVehiclesPage() {
   const dispatch = useAppDispatch();
-  const allVehicles = useAppSelector((s) => s.vehicles.allVehicles);
+  const allVehicles = useAppSelector(selectAllVehicles);
+  const loadStatus = useAppSelector(selectAllVehiclesStatus);
+  const loadError = useAppSelector((s) => s.vehicles.allError);
+
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  useEffect(() => {
+    dispatch(fetchAllVehicles({ force: true }));
+  }, [dispatch]);
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [form, setForm] = useState<VehicleForm>(emptyVehicleForm);
+  /** What the add/edit modal starts from (validation + state live in react-hook-form). */
+  const [initialValues, setInitialValues] = useState<VehicleForm>(emptyVehicleForm);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [deletingVehicle, setDeletingVehicle] = useState<Vehicle | null>(null);
 
@@ -56,31 +72,55 @@ export default function AdminVehiclesPage() {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const handleAdd = () => {
-    dispatch(addVehicle(formToVehicle(form)));
-    setForm(emptyVehicleForm);
+  // Rejections propagate to the modal, which shows them as a form-level error.
+  const handleAdd = async (values: VehicleForm) => {
+    await dispatch(addVehicle(formToVehicle(values))).unwrap();
     setAddOpen(false);
   };
 
-  const handleEdit = () => {
+  const handleEdit = async (values: VehicleForm) => {
     if (!editingVehicle) return;
-    dispatch(updateVehicle({ id: editingVehicle.id, ...formToVehicle(form) }));
+    await dispatch(updateVehicle({ id: editingVehicle.id, ...formToVehicle(values) })).unwrap();
     setEditOpen(false);
     setEditingVehicle(null);
-    setForm(emptyVehicleForm);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deletingVehicle) return;
-    dispatch(deleteVehicle(deletingVehicle.id));
+    setPageError(null);
+    try {
+      await dispatch(deleteVehicle(deletingVehicle.id)).unwrap();
+    } catch (message) {
+      setPageError(String(message));
+    }
     setDeleteOpen(false);
     setDeletingVehicle(null);
   };
 
   const openEdit = (vehicle: Vehicle) => {
     setEditingVehicle(vehicle);
-    setForm(vehicleToForm(vehicle));
+    setInitialValues(vehicleToForm(vehicle));
     setEditOpen(true);
+  };
+
+  /** Rows whose sold-out switch is waiting on the API. */
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
+
+  /** PATCH /admin/vehicles/:id/status/:status — the store updates every list on success. */
+  const toggleSold = async (vehicle: Vehicle, sold: boolean) => {
+    setPageError(null);
+    setTogglingIds((s) => new Set(s).add(vehicle.id));
+    try {
+      await dispatch(setVehicleStatus({ id: vehicle.id, status: sold ? "sold" : "unsold" })).unwrap();
+    } catch (message) {
+      setPageError(`Couldn't update ${vehicle.make} ${vehicle.model}: ${String(message)}`);
+    } finally {
+      setTogglingIds((s) => {
+        const next = new Set(s);
+        next.delete(vehicle.id);
+        return next;
+      });
+    }
   };
 
   const openDelete = (vehicle: Vehicle) => {
@@ -102,12 +142,13 @@ export default function AdminVehiclesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {[
           { label: "Total", value: allVehicles.length, color: "text-orange" },
           { label: "Featured", value: allVehicles.filter((v) => v.featured).length, color: "text-emerald-400" },
           { label: "Petrol/Diesel", value: allVehicles.filter((v) => v.fuelType === "Petrol" || v.fuelType === "Diesel").length, color: "text-blue-400" },
           { label: "Electric/Hybrid", value: allVehicles.filter((v) => v.fuelType === "Electric" || v.fuelType === "Hybrid" || v.fuelType === "Plug-in Hybrid").length, color: "text-purple-400" },
+          { label: "Sold Out", value: allVehicles.filter((v) => v.vehicleStatus === "sold").length, color: "text-red-400" },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface rounded-xl border border-white/5 p-4">
             <p className="text-xs text-zinc-500 mb-1">{stat.label}</p>
@@ -115,6 +156,12 @@ export default function AdminVehiclesPage() {
           </div>
         ))}
       </div>
+
+      {(pageError || loadError) && (
+        <AdminAlert onDismiss={pageError ? () => setPageError(null) : undefined}>
+          {pageError ?? loadError}
+        </AdminAlert>
+      )}
 
       <div className="bg-surface rounded-xl border border-white/5 overflow-hidden">
         <div className="flex items-center justify-between gap-4 p-4 border-b border-white/5">
@@ -128,7 +175,7 @@ export default function AdminVehiclesPage() {
             />
           </div>
           <Button
-            onClick={() => { setForm(emptyVehicleForm); setAddOpen(true); }}
+            onClick={() => { setInitialValues(emptyVehicleForm); setAddOpen(true); }}
             className="btn-gradient gap-2 shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -146,20 +193,25 @@ export default function AdminVehiclesPage() {
               <TableHead className="text-zinc-400 hidden lg:table-cell">Fuel</TableHead>
               <TableHead className="text-zinc-400 hidden lg:table-cell">Transmission</TableHead>
               <TableHead className="text-zinc-400 hidden md:table-cell">Featured</TableHead>
+              <TableHead className="text-zinc-400">Sold Out</TableHead>
               <TableHead className="text-zinc-400 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginated.map((vehicle) => (
-              <TableRow key={vehicle.id} className="border-white/5">
+            {paginated.map((vehicle) => {
+              const sold = vehicle.vehicleStatus === "sold";
+              const toggling = togglingIds.has(vehicle.id);
+              return (
+              <TableRow key={vehicle.id} className={`border-white/5 ${sold ? "bg-red-500/[0.03]" : ""}`}>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-8 rounded-md bg-white/5 overflow-hidden shrink-0">
+                    <div className="relative w-16 h-11 rounded-md bg-white/5 overflow-hidden shrink-0">
                       <img
                         src={vehicle.image}
                         alt={`${vehicle.make} ${vehicle.model}`}
-                        className="w-full h-full object-cover"
+                        className={`w-full h-full object-cover ${sold ? "grayscale-[60%]" : ""}`}
                       />
+                      <SoldOutOverlay sold={sold} size="xs" />
                     </div>
                     <div>
                       <p className="font-medium text-white text-sm">
@@ -189,6 +241,20 @@ export default function AdminVehiclesPage() {
                     <StatusBadge variant="featured" dot>Featured</StatusBadge>
                   )}
                 </TableCell>
+                <TableCell>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <Switch
+                      checked={sold}
+                      disabled={toggling}
+                      onCheckedChange={(checked) => toggleSold(vehicle, checked)}
+                      aria-label={`Mark ${vehicle.make} ${vehicle.model} as sold out`}
+                      className="data-checked:bg-red-600"
+                    />
+                    <span className={`text-xs font-medium ${sold ? "text-red-400" : "text-zinc-500"}`}>
+                      {toggling ? "Saving…" : sold ? "Sold out" : "Available"}
+                    </span>
+                  </label>
+                </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
                     <Button
@@ -210,11 +276,12 @@ export default function AdminVehiclesPage() {
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
             {paginated.length === 0 && (
               <TableRow className="border-white/5">
-                <TableCell colSpan={8} className="text-center text-zinc-500 py-8">
-                  No vehicles found
+                <TableCell colSpan={9} className="text-center text-zinc-500 py-8">
+                  {loadStatus === "loading" ? "Loading vehicles…" : "No vehicles found"}
                 </TableCell>
               </TableRow>
             )}
@@ -269,8 +336,7 @@ export default function AdminVehiclesPage() {
       <VehicleFormModal
         open={addOpen}
         onOpenChange={setAddOpen}
-        form={form}
-        setForm={setForm}
+        initialValues={initialValues}
         onSubmit={handleAdd}
         mode="add"
       />
@@ -278,8 +344,7 @@ export default function AdminVehiclesPage() {
       <VehicleFormModal
         open={editOpen}
         onOpenChange={setEditOpen}
-        form={form}
-        setForm={setForm}
+        initialValues={initialValues}
         onSubmit={handleEdit}
         mode="edit"
       />

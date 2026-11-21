@@ -5,13 +5,23 @@ import { ArrowRight, Heart, Fuel, Gauge, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { vehicles } from "@/lib/data";
+import { vehiclePath } from "@/lib/vehicle-url";
+import { useEffect } from "react";
+import { defaultIntentFor, vehicleEnquiryHref } from "@/lib/enquiry-intent";
+import { SoldOutOverlay } from "@/components/vehicles/sold-out-stamp";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import {
+  fetchFeaturedVehicles,
+  selectFeaturedStatus,
+  selectFeaturedVehicles,
+  type Vehicle,
+} from "@/redux/vehicles/vehiclesIndex";
 
 function VehicleCard({
   vehicle,
   index,
 }: {
-  vehicle: (typeof vehicles)[0];
+  vehicle: Vehicle;
   index: number;
 }) {
   return (
@@ -35,6 +45,7 @@ function VehicleCard({
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
+        <SoldOutOverlay sold={vehicle.vehicleStatus === "sold"} />
 
         {/* Wishlist */}
         <button className="absolute top-3 right-3 w-9 h-9 rounded-full glass border border-white/10 flex items-center justify-center text-zinc-400 hover:text-orange hover:border-orange/30 transition-all">
@@ -89,7 +100,7 @@ function VehicleCard({
             </p>
           </div>
           <div className="flex gap-2">
-            <Link href={`/vehicles/${vehicle.id}`}>
+            <Link href={vehiclePath(vehicle)}>
               <Button
                 variant="outline"
                 size="sm"
@@ -98,15 +109,17 @@ function VehicleCard({
                 View Details
               </Button>
             </Link>
-            <Link href="/contact">
-              <Button
-                size="sm"
-                className="rounded-full btn-gradient text-xs gap-1"
-              >
-                Enquire
-                <ArrowRight className="w-3 h-3" />
-              </Button>
-            </Link>
+            {vehicle.vehicleStatus !== "sold" && (
+              <Link href={vehicleEnquiryHref(vehicle, defaultIntentFor(vehicle))}>
+                <Button
+                  size="sm"
+                  className="rounded-full btn-gradient text-xs gap-1"
+                >
+                  {vehicle.enableRequestPrice ? "Request Price" : "Enquire"}
+                  <ArrowRight className="w-3 h-3" />
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -115,7 +128,13 @@ function VehicleCard({
 }
 
 export function FeaturedVehicles() {
-  const featured = vehicles.slice(0, 6);
+  const dispatch = useAppDispatch();
+  const featured = useAppSelector(selectFeaturedVehicles);
+  const status = useAppSelector(selectFeaturedStatus);
+
+  useEffect(() => {
+    dispatch(fetchFeaturedVehicles(6));
+  }, [dispatch]);
 
   return (
     <section className="py-24 relative">
@@ -160,7 +179,21 @@ export function FeaturedVehicles() {
           {featured.map((vehicle, i) => (
             <VehicleCard key={vehicle.id} vehicle={vehicle} index={i} />
           ))}
+          {featured.length === 0 &&
+            status !== "failed" &&
+            Array.from({ length: 3 }).map((_, i) => (
+              <div
+                key={i}
+                aria-hidden
+                className="h-[420px] rounded-2xl border border-white/5 bg-surface animate-pulse"
+              />
+            ))}
         </div>
+        {featured.length === 0 && status === "failed" && (
+          <p className="text-center text-zinc-500 py-12">
+            Our stock is being updated — please check back shortly.
+          </p>
+        )}
       </div>
     </section>
   );

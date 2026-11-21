@@ -31,9 +31,14 @@ const navLinks = [
   { label: "Contact", href: "/contact" },
 ];
 
+/** "Enquire Now" lands directly on the contact page's booking form. */
+const ENQUIRE_HREF = "/contact#booking";
+
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  // Controlled so tapping a link closes the menu (the header stays mounted across navigations).
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -108,13 +113,17 @@ export function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            <button className="hidden md:flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-colors text-zinc-400 hover:text-white">
+            <Link
+              href="/vehicles"
+              aria-label="Search vehicles"
+              className="hidden md:flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-colors text-zinc-400 hover:text-white"
+            >
               <Search className="w-5 h-5" />
-            </button>
+            </Link>
             <button className="hidden md:flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-colors text-zinc-400 hover:text-white">
               <Heart className="w-5 h-5" />
             </button>
-            <Link href="/contact">
+            <Link href={ENQUIRE_HREF}>
               <Button className="hidden sm:flex btn-gradient rounded-full px-6 gap-2">
                 <Phone className="w-4 h-4" />
                 Enquire Now
@@ -122,7 +131,7 @@ export function Header() {
             </Link>
 
             {/* Mobile Menu */}
-            <Sheet>
+            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger className="lg:hidden flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-colors text-white">
                 <Menu className="w-6 h-6" />
               </SheetTrigger>
@@ -143,6 +152,7 @@ export function Header() {
                       <Link
                         key={link.label}
                         href={link.href}
+                        onClick={() => setMobileOpen(false)}
                         className="block px-4 py-3.5 text-base font-medium text-zinc-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
                       >
                         {link.label}
@@ -150,10 +160,12 @@ export function Header() {
                     ))}
                   </nav>
                   <div className="p-6 border-t border-white/10">
-                    <Button className="w-full btn-gradient rounded-full gap-2">
-                      <Phone className="w-4 h-4" />
-                      Enquire Now
-                    </Button>
+                    <Link href={ENQUIRE_HREF} onClick={() => setMobileOpen(false)} className="block">
+                      <Button className="w-full btn-gradient rounded-full gap-2">
+                        <Phone className="w-4 h-4" />
+                        Enquire Now
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               </SheetContent>

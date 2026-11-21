@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { SoldOutOverlay } from "@/components/vehicles/sold-out-stamp";
 import { useSearchParams } from "next/navigation";
 import {
   defaultIntentFor,
@@ -384,11 +385,7 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                   <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-80 transition-opacity" />
                 </div>
 
-                {vehicle.vehicleStatus === "sold" && (
-                  <div className="absolute top-3 right-3 bg-red-500/90 text-white text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider">
-                    Sold
-                  </div>
-                )}
+                <SoldOutOverlay sold={vehicle.vehicleStatus === "sold"} size="lg" />
 
                 {images.length > 1 && (
                   <>
@@ -465,7 +462,7 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                         )}
                         {vehicle.vehicleStatus === "sold" && (
                           <Badge className="bg-red-500/15 text-red-400 border-red-500/20 rounded-full">
-                            Sold
+                            Sold Out
                           </Badge>
                         )}
                       </div>
@@ -845,7 +842,8 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
-                      <Badge className="absolute top-3 left-3 bg-orange/90 text-white border-0 rounded-full text-xs">
+                      <SoldOutOverlay sold={v.vehicleStatus === "sold"} size="sm" />
+                      <Badge className="absolute top-3 left-3 z-20 bg-orange/90 text-white border-0 rounded-full text-xs">
                         {v.year}
                       </Badge>
                     </div>

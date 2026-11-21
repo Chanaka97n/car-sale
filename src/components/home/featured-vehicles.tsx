@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { useEffect } from "react";
 import { defaultIntentFor, vehicleEnquiryHref } from "@/lib/enquiry-intent";
+import { SoldOutOverlay } from "@/components/vehicles/sold-out-stamp";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import {
   fetchFeaturedVehicles,
@@ -43,6 +44,7 @@ function VehicleCard({
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
+        <SoldOutOverlay sold={vehicle.vehicleStatus === "sold"} />
 
         {/* Wishlist */}
         <button className="absolute top-3 right-3 w-9 h-9 rounded-full glass border border-white/10 flex items-center justify-center text-zinc-400 hover:text-orange hover:border-orange/30 transition-all">

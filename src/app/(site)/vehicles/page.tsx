@@ -31,6 +31,7 @@ import { Slider } from "@/components/ui/slider";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import Link from "next/link";
 import { defaultIntentFor, vehicleEnquiryHref } from "@/lib/enquiry-intent";
+import { SoldOutOverlay } from "@/components/vehicles/sold-out-stamp";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import {
   setSearch,
@@ -792,11 +793,7 @@ function VehiclesContent() {
                             </Badge>
                           )}
                         </div>
-                        {vehicle.vehicleStatus === "sold" && (
-                          <Badge className="absolute top-3 right-3 bg-red-500/90 text-white border-0 rounded-full text-xs uppercase tracking-wide">
-                            Sold
-                          </Badge>
-                        )}
+                        <SoldOutOverlay sold={vehicle.vehicleStatus === "sold"} size={viewMode === "list" ? "sm" : "md"} />
                         {vehicle.salePrice && vehicle.vehicleStatus !== "sold" ? (
                           <Badge className="absolute top-3 right-3 bg-emerald-500/90 text-white border-0 rounded-full text-xs">
                             Save &pound;{(vehicle.price - vehicle.salePrice).toLocaleString()}

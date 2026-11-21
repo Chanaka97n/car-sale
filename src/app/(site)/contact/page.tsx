@@ -213,24 +213,28 @@ export default function ContactPage() {
               to help.
             </p>
             <div className="flex gap-4 mt-8">
-              <Button className="btn-gradient rounded-full px-8 gap-2">
-                Book a Test Drive
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="outline"
-                className="rounded-full border-white/20 text-white hover:bg-white/5 gap-2"
-              >
-                Contact Our Team
-                <ArrowRight className="w-4 h-4" />
-              </Button>
+              <a href="#booking">
+                <Button className="btn-gradient rounded-full px-8 gap-2">
+                  Book a Test Drive
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </a>
+              <a href="#contact-team">
+                <Button
+                  variant="outline"
+                  className="rounded-full border-white/20 text-white hover:bg-white/5 gap-2"
+                >
+                  Contact Our Team
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </a>
             </div>
           </motion.div>
         </div>
       </section>
 
       {/* Booking Form */}
-      <section id="booking" className="py-16 relative">
+      <section id="booking" className="py-16 relative scroll-mt-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -609,7 +613,7 @@ export default function ContactPage() {
       </section>
 
       {/* Contact Methods */}
-      <section className="py-16 bg-surface/50">
+      <section id="contact-team" className="py-16 bg-surface/50 scroll-mt-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {contactMethods.map((method, i) => (

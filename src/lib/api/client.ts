@@ -146,6 +146,62 @@ export async function fetchAllPages<T>(
   return items;
 }
 
+// ── Response cache ────────────────────────────────────────────────────────
+
+/**
+ * Tiny in-memory LRU with expiry for idempotent GETs. Lets the UI flip back to a
+ * filter combination it has just seen without another round trip.
+ */
+export class TtlCache<V> {
+  private entries = new Map<string, { at: number; value: V }>();
+
+  constructor(
+    private readonly ttlMs: number,
+    private readonly maxEntries: number,
+  ) {}
+
+  get(key: string): V | undefined {
+    const entry = this.entries.get(key);
+    if (!entry) return undefined;
+    if (Date.now() - entry.at > this.ttlMs) {
+      this.entries.delete(key);
+      return undefined;
+    }
+    // Re-insert to mark as most recently used.
+    this.entries.delete(key);
+    this.entries.set(key, entry);
+    return entry.value;
+  }
+
+  set(key: string, value: V) {
+    this.entries.delete(key);
+    this.entries.set(key, { at: Date.now(), value });
+    while (this.entries.size > this.maxEntries) {
+      this.entries.delete(this.entries.keys().next().value as string);
+    }
+  }
+
+  clear() {
+    this.entries.clear();
+  }
+}
+
+/**
+ * Canonical string for a query: sorted keys, empty values dropped, array values
+ * sorted — so `fuelTypes=Diesel,Petrol` and `Petrol,Diesel` share a cache entry.
+ */
+export function queryKey(query: Query): string {
+  return Object.keys(query)
+    .sort()
+    .flatMap((k) => {
+      const v = query[k];
+      if (v === undefined || v === null || v === "") return [];
+      if (Array.isArray(v)) return v.length ? [`${k}=${[...v].sort().join(",")}`] : [];
+      return [`${k}=${v}`];
+    })
+    .join("&");
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 export function errorMessage(err: unknown, fallback = "Something went wrong"): string {
   if (err instanceof ApiError) return err.message;

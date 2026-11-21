@@ -2,7 +2,7 @@ import { errorMessage, type Paginated } from "@/lib/api/client";
 import { createAppAsyncThunk } from "../createAppAsyncThunk";
 import {
   filtersToFacetsQuery,
-  filtersToQuery,
+  listingQueries,
   priceSliderMax,
   uploadPendingImages,
   vehiclesApi,
@@ -15,16 +15,44 @@ import type { Vehicle, VehicleFacets, VehicleInput } from "./vehiclesTypes";
  * GET /vehicles — one page of the public listing using the current filters,
  * sort and page from state. Dispatch again whenever filters or page change.
  */
-export const fetchVehicles = createAppAsyncThunk<Paginated<Vehicle>, void>(
+export interface FetchVehiclesResult extends Paginated<Vehicle> {
+  facets?: VehicleFacets;
+  listKey: string;
+  facetsKey: string;
+}
+
+/**
+ * GET /vehicles — one page of the public listing for the current filters/sort/page.
+ *
+ * Optimised for the filter UI:
+ * - sidebar facets ride along in the SAME request (`includeFacets`) and only when
+ *   the filters changed (paging/sorting reuses the facets already shown);
+ * - skipped entirely if the identical query is already shown or in flight;
+ * - recently seen queries are answered from an in-memory cache;
+ * - pass `{ force: true }` to bypass the skip (e.g. a "Try again" button).
+ */
+export const fetchVehicles = createAppAsyncThunk<FetchVehiclesResult, { force?: boolean } | void>(
   "vehicles/fetchPage",
-  async (_, { getState, signal, rejectWithValue }) => {
-    const { filters, currentPage, pageSize, facets } = getState().vehicles;
-    const query = filtersToQuery(filters, currentPage, pageSize, priceSliderMax(facets));
+  async (arg, { getState, signal, rejectWithValue }) => {
+    const state = getState().vehicles;
+    const { listQuery, listKey, facetsKey } = listingQueries(state);
+    const force = !!(arg && arg.force);
+    const withFacets = force || facetsKey !== state.facetsKey || !state.facets;
     try {
-      return await vehiclesApi.list(query, signal);
+      const res = await vehiclesApi.search(listQuery, { withFacets, fresh: force, signal });
+      return { ...res, listKey, facetsKey };
     } catch (err) {
       return rejectWithValue(errorMessage(err, "Could not load vehicles"));
     }
+  },
+  {
+    condition: (arg, { getState }) => {
+      if (arg && arg.force) return true;
+      const state = getState().vehicles;
+      const { listKey } = listingQueries(state);
+      if (listKey === state.inFlightKey) return false;
+      return !(listKey === state.listKey && state.status === "succeeded");
+    },
   },
 );
 

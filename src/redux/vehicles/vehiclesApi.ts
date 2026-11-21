@@ -1,11 +1,19 @@
 import {
   api,
   fetchAllPages,
+  queryKey,
+  TtlCache,
   withoutNulls,
   type Paginated,
   type Query,
 } from "@/lib/api/client";
-import type { Vehicle, VehicleFacets, VehicleFilters, VehicleInput } from "./vehiclesTypes";
+import type {
+  Vehicle,
+  VehicleFacets,
+  VehicleFilters,
+  VehicleInput,
+  VehiclesState,
+} from "./vehiclesTypes";
 import { initialFilters } from "./vehiclesTypes";
 
 /** API rows have `null` for empty columns and extra timestamps; normalise to the frontend type. */
@@ -65,6 +73,35 @@ export function filtersToFacetsQuery(filters: VehicleFilters, priceCeiling?: num
   return query;
 }
 
+/**
+ * The list + facets queries for the current listing state, with canonical keys
+ * used to skip duplicate requests and to decide whether facets need refreshing
+ * (they depend on filters only, not on page or sort).
+ */
+export function listingQueries(
+  s: Pick<VehiclesState, "filters" | "currentPage" | "pageSize" | "facets">,
+) {
+  const ceiling = priceSliderMax(s.facets);
+  const listQuery = filtersToQuery(s.filters, s.currentPage, s.pageSize, ceiling);
+  return {
+    listQuery,
+    listKey: queryKey(listQuery),
+    facetsKey: queryKey(filtersToFacetsQuery(s.filters, ceiling)),
+  };
+}
+
+export interface ListingResult extends Paginated<Vehicle> {
+  facets?: VehicleFacets;
+}
+
+/** Recent listing responses (60 s, 50 entries). Cleared on any admin vehicle change. */
+const listingCache = new TtlCache<ListingResult>(60_000, 50);
+
+function afterMutation<T>(result: T): T {
+  listingCache.clear();
+  return result;
+}
+
 /** Strips fields the API doesn't accept on create/update. */
 function toBody(input: Partial<VehicleInput> & { id?: string }, { clearEmpty = false } = {}) {
   // On update, `undefined` means "cleared in the form" → send null so the column is emptied.
@@ -90,6 +127,39 @@ export const vehiclesApi = {
     return { ...res, data: res.data.map(toVehicle) };
   },
 
+  /**
+   * Public listing page in ONE request: GET /vehicles[?includeFacets=true].
+   * Served from the short-lived cache when the same query was just fetched.
+   */
+  search: async (
+    query: Query,
+    {
+      withFacets = false,
+      fresh = false,
+      signal,
+    }: { withFacets?: boolean; fresh?: boolean; signal?: AbortSignal } = {},
+  ): Promise<ListingResult> => {
+    const key = queryKey(query);
+    const hit = fresh ? undefined : listingCache.get(key);
+    if (hit && (!withFacets || hit.facets)) return hit;
+
+    const res = await api.get<Paginated<ApiVehicle> & { facets?: VehicleFacets }>(
+      "/vehicles",
+      { ...query, includeFacets: withFacets || undefined },
+      { auth: false, signal },
+    );
+    const result: ListingResult = {
+      data: res.data.map(toVehicle),
+      meta: res.meta,
+      facets: res.facets ?? hit?.facets,
+    };
+    listingCache.set(key, result);
+    return result;
+  },
+
+  /** Drop cached listing responses (call after creating/editing/deleting stock). */
+  invalidateCache: () => listingCache.clear(),
+
   /** Filter sidebar bounds + counts. Takes the same filters as `list` (paging/sort ignored). */
   facets: (query: Query, signal?: AbortSignal) =>
     api.get<VehicleFacets>("/vehicles/facets", query, { auth: false, signal }),
@@ -113,19 +183,28 @@ export const vehiclesApi = {
 
   adminGet: async (id: string) => toVehicle(await api.get<ApiVehicle>(`/admin/vehicles/${id}`)),
 
+  // Every mutation clears the listing cache so the public listing never shows stale stock.
   create: async (input: VehicleInput) =>
-    toVehicle(await api.post<ApiVehicle>("/admin/vehicles", toBody(input))),
+    afterMutation(toVehicle(await api.post<ApiVehicle>("/admin/vehicles", toBody(input)))),
 
   update: async (id: string, input: Partial<VehicleInput>) =>
-    toVehicle(await api.patch<ApiVehicle>(`/admin/vehicles/${id}`, toBody(input, { clearEmpty: true }))),
+    afterMutation(
+      toVehicle(
+        await api.patch<ApiVehicle>(`/admin/vehicles/${id}`, toBody(input, { clearEmpty: true })),
+      ),
+    ),
 
-  remove: (id: string) => api.delete(`/admin/vehicles/${id}`),
+  remove: async (id: string) => afterMutation(await api.delete(`/admin/vehicles/${id}`)),
 
   setFeatured: async (id: string, featured: boolean) =>
-    toVehicle(await api.patch<ApiVehicle>(`/admin/vehicles/${id}/featured/${featured}`)),
+    afterMutation(
+      toVehicle(await api.patch<ApiVehicle>(`/admin/vehicles/${id}/featured/${featured}`)),
+    ),
 
   setStatus: async (id: string, status: "sold" | "unsold") =>
-    toVehicle(await api.patch<ApiVehicle>(`/admin/vehicles/${id}/status/${status}`)),
+    afterMutation(
+      toVehicle(await api.patch<ApiVehicle>(`/admin/vehicles/${id}/status/${status}`)),
+    ),
 
   /** POST /admin/uploads/images (multipart, field `files`) → public URLs. */
   uploadImages: async (files: Blob[]) => {

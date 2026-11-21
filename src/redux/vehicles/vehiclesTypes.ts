@@ -106,6 +106,13 @@ export interface VehiclesState {
   facets: VehicleFacets | null;
   facetsStatus: RequestStatus;
 
+  /** Canonical query of the results currently shown — identical requests are skipped. */
+  listKey: string | null;
+  /** Canonical filters the current facets belong to — facets refetch only when this changes. */
+  facetsKey: string | null;
+  /** Query of the request in flight, so a duplicate dispatch doesn't start a second one. */
+  inFlightKey: string | null;
+
   /** Home page featured cars. */
   featured: Vehicle[];
   featuredStatus: RequestStatus;

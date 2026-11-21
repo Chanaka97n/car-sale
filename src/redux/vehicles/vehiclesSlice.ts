@@ -12,6 +12,7 @@ import {
   setVehicleStatus,
   updateVehicle,
 } from "./vehiclesThunks";
+import { listingQueries } from "./vehiclesApi";
 import type { Vehicle, VehicleFilters, VehiclesState } from "./vehiclesTypes";
 import { initialFilters } from "./vehiclesTypes";
 
@@ -31,6 +32,10 @@ const initialState: VehiclesState = {
 
   facets: null,
   facetsStatus: "idle",
+
+  listKey: null,
+  facetsKey: null,
+  inFlightKey: null,
 
   featured: [],
   featuredStatus: "idle",
@@ -52,6 +57,12 @@ function toggle(list: string[], value: string) {
   const idx = list.indexOf(value);
   if (idx >= 0) list.splice(idx, 1);
   else list.push(value);
+}
+
+/** Stock changed — the next listing fetch must hit the API (results and facets). */
+function staleListing(state: VehiclesState) {
+  state.listKey = null;
+  state.facetsKey = null;
 }
 
 /** Apply a saved vehicle to every cached list that contains it. */
@@ -131,15 +142,24 @@ const vehiclesSlice = createSlice({
       .addCase(fetchVehicles.pending, (state) => {
         state.status = "loading";
         state.error = null;
+        state.inFlightKey = listingQueries(state).listKey;
       })
       .addCase(fetchVehicles.fulfilled, (state, { payload }) => {
         state.status = "succeeded";
+        state.inFlightKey = null;
+        state.listKey = payload.listKey;
         state.filteredVehicles = payload.data;
         state.totalCount = payload.meta.total;
         state.totalPages = payload.meta.totalPages;
+        if (payload.facets) {
+          state.facets = payload.facets;
+          state.facetsKey = payload.facetsKey;
+          state.facetsStatus = "succeeded";
+        }
         if (state.currentPage > payload.meta.totalPages) state.currentPage = payload.meta.totalPages;
       })
       .addCase(fetchVehicles.rejected, (state, { payload, meta }) => {
+        state.inFlightKey = null;
         if (meta.aborted) return; // superseded by a newer request
         state.status = "failed";
         state.error = payload ?? "Could not load vehicles";
@@ -202,10 +222,12 @@ const vehiclesSlice = createSlice({
       // Admin mutations
       .addCase(addVehicle.fulfilled, (state, { payload }) => {
         state.mutationStatus = "succeeded";
+        staleListing(state);
         state.allVehicles.unshift(payload);
       })
       .addCase(deleteVehicle.fulfilled, (state, { payload: id }) => {
         state.mutationStatus = "succeeded";
+        staleListing(state);
         state.allVehicles = state.allVehicles.filter((v) => v.id !== id);
         state.filteredVehicles = state.filteredVehicles.filter((v) => v.id !== id);
         state.featured = state.featured.filter((v) => v.id !== id);
@@ -214,6 +236,7 @@ const vehiclesSlice = createSlice({
         isAnyOf(updateVehicle.fulfilled, setVehicleFeatured.fulfilled, setVehicleStatus.fulfilled),
         (state, { payload }) => {
           state.mutationStatus = "succeeded";
+          staleListing(state);
           replaceEverywhere(state, payload);
         },
       )

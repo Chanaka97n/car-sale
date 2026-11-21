@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useCallback, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -56,7 +56,6 @@ import {
   selectVehiclesError,
   selectVehicleFacets,
   selectPriceSliderMax,
-  fetchVehicleFacets,
   type VehicleFilters,
   type VehicleFacets,
   type FacetCount,
@@ -140,6 +139,108 @@ function searchParamsToFilters(params: URLSearchParams): Partial<VehicleFilters>
   if (page) result.page = parseInt(page);
 
   return result;
+}
+
+// --- Request pacing ---
+
+/** Pause after the last keystroke before the search term is applied. */
+const SEARCH_DEBOUNCE_MS = 350;
+/** Batches near-simultaneous filter changes (e.g. several checkbox clicks) into one request. */
+const FETCH_BATCH_MS = 150;
+
+/**
+ * Search box with local state: typing updates only this input; the term reaches
+ * redux (→ URL + API) once the user pauses, or immediately on Enter. Whitespace-only
+ * edits ("bm" → "bm ") never trigger a request.
+ */
+function DebouncedSearchInput({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (text: string) => void;
+}) {
+  const [text, setText] = useState(value);
+  // Follow external changes (Reset All, URL hydration, the other sidebar instance).
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setText(value);
+  }
+
+  const commitRef = useRef(onCommit);
+  useEffect(() => {
+    commitRef.current = onCommit;
+  });
+
+  useEffect(() => {
+    if (text.trim() === value.trim()) return;
+    const timer = setTimeout(() => commitRef.current(text.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [text, value]);
+
+  return (
+    <Input
+      type="search"
+      placeholder="e.g. BMW 3 Series, SUV"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && text.trim() !== value.trim()) commitRef.current(text.trim());
+      }}
+      aria-label="Search vehicles"
+      className="pl-10 rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-500"
+    />
+  );
+}
+
+/**
+ * Price slider that only commits when the thumb is released (or a key press
+ * ends), instead of firing a request for every pixel dragged.
+ */
+function PriceRangeFilter({
+  low,
+  high,
+  max,
+  unlimited,
+  onCommit,
+}: {
+  low: number;
+  high: number;
+  max: number;
+  unlimited: boolean;
+  onCommit: (range: [number, number]) => void;
+}) {
+  const [draft, setDraft] = useState<[number, number] | null>(null);
+  const [shownLow, shownHigh] = draft ?? [low, high];
+  const toRange = (val: number | readonly number[]): [number, number] =>
+    Array.isArray(val) ? [val[0], val[1]] : [val as number, val as number];
+
+  return (
+    <>
+      <Slider
+        value={[shownLow, shownHigh]}
+        onValueChange={(val) => setDraft(toRange(val))}
+        onValueCommitted={(val) => {
+          setDraft(null);
+          const [a, b] = toRange(val);
+          if (a !== low || b !== high) onCommit([a, b]);
+        }}
+        min={0}
+        max={max}
+        step={1000}
+        className="mb-4"
+      />
+      <div className="flex items-center gap-2 text-sm text-zinc-400">
+        <span>&pound;{shownLow.toLocaleString()}</span>
+        <span className="text-zinc-600">to</span>
+        <span>
+          &pound;{shownHigh.toLocaleString()}
+          {(draft ? shownHigh >= max : unlimited) && "+"}
+        </span>
+      </div>
+    </>
+  );
 }
 
 // --- Facet helpers ---
@@ -262,11 +363,9 @@ function FilterSidebar({ className = "" }: { className?: string }) {
           </h3>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <Input
-              placeholder="e.g. BMW 3 Series, SUV"
+            <DebouncedSearchInput
               value={filters.search}
-              onChange={(e) => dispatch(setSearch(e.target.value))}
-              className="pl-10 rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-500"
+              onCommit={(text) => dispatch(setSearch(text))}
             />
           </div>
         </div>
@@ -304,28 +403,13 @@ function FilterSidebar({ className = "" }: { className?: string }) {
           <h3 className="text-sm font-semibold text-white mb-3">
             Price Range
           </h3>
-          <Slider
-            value={[priceLow, priceHigh]}
-            onValueChange={(val) =>
-              dispatch(
-                setPriceRange(
-                  Array.isArray(val) ? [val[0], val[1]] : [val, val],
-                ),
-              )
-            }
-            min={0}
+          <PriceRangeFilter
+            low={priceLow}
+            high={priceHigh}
             max={sliderMax}
-            step={1000}
-            className="mb-4"
+            unlimited={priceUnlimited}
+            onCommit={(range) => dispatch(setPriceRange(range))}
           />
-          <div className="flex items-center gap-2 text-sm text-zinc-400">
-            <span>&pound;{priceLow.toLocaleString()}</span>
-            <span className="text-zinc-600">to</span>
-            <span>
-              &pound;{priceHigh.toLocaleString()}
-              {priceUnlimited && "+"}
-            </span>
-          </div>
         </div>
 
         {/* Year — range of model years in stock */}
@@ -410,7 +494,6 @@ export default function VehiclesPage() {
 function VehiclesContent() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const dispatch = useAppDispatch();
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const filters = useAppSelector(selectFilters);
@@ -433,46 +516,39 @@ function VehiclesContent() {
     }
   }, [searchParams, dispatch]);
 
-  // Sync redux state → URL (after hydration)
+  // Sync redux state → URL (after hydration). Uses the native History API, which
+  // Next.js integrates with useSearchParams, so changing a filter does NOT trigger
+  // a router navigation / server round trip like router.replace() would.
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
-    const params = filtersToSearchParams(filters, currentPage);
-    const qs = params.toString();
-    const target = qs ? `/vehicles?${qs}` : "/vehicles";
-    router.replace(target, { scroll: false });
-  }, [filters, currentPage, router]);
+    const qs = filtersToSearchParams(filters, currentPage).toString();
+    const target = qs ? `?${qs}` : window.location.pathname;
+    if (window.location.search !== (qs ? `?${qs}` : "")) {
+      window.history.replaceState(window.history.state, "", target);
+    }
+  }, [filters, currentPage]);
 
   const error = useAppSelector(selectVehiclesError);
 
-  // Fetch the current page from the API whenever filters/sort/page change.
-  // Debounced so typing in the search box (and URL hydration) sends one request;
-  // a superseded in-flight request is aborted.
+  // ONE request per settled change: results + (only when filters changed) sidebar
+  // facets come back together. The search box and price slider already debounce/
+  // commit before touching redux, so this short delay just batches rapid clicks
+  // (e.g. ticking several checkboxes). Identical queries are skipped by the thunk
+  // and a superseded in-flight request is aborted.
   useEffect(() => {
     let request: { abort: () => void } | undefined;
     const timer = setTimeout(() => {
       request = dispatch(fetchVehicles());
-    }, 250);
+    }, FETCH_BATCH_MS);
     return () => {
       clearTimeout(timer);
       request?.abort();
     };
   }, [filters, currentPage, dispatch]);
-
-  // Sidebar counts/bounds depend on filters only (not the page number).
-  useEffect(() => {
-    let request: { abort: () => void } | undefined;
-    const timer = setTimeout(() => {
-      request = dispatch(fetchVehicleFacets());
-    }, 250);
-    return () => {
-      clearTimeout(timer);
-      request?.abort();
-    };
-  }, [filters, dispatch]);
 
   // Filter option lists (makes, fuel types, …) come from the admin Settings.
   useEffect(() => {
@@ -647,7 +723,7 @@ function VehiclesContent() {
                     {error ?? "Could not load vehicles"}
                   </p>
                   <button
-                    onClick={() => dispatch(fetchVehicles())}
+                    onClick={() => dispatch(fetchVehicles({ force: true }))}
                     className="text-orange hover:text-orange-light text-sm font-medium transition-colors"
                   >
                     Try again

@@ -1,5 +1,8 @@
 export interface Vehicle {
   id: string;
+  /** SEO URL segment — link with `vehiclePath(vehicle)` (src/lib/vehicle-url.ts). */
+  slug?: string;
+  updatedAt?: string;
   make: string;
   model: string;
   variant: string;

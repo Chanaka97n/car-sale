@@ -1,4 +1,5 @@
 import type { Vehicle } from "@/redux/vehicles/vehiclesTypes";
+import { vehiclePath } from "./vehicle-url";
 
 /**
  * "Enquire" deep links: `/vehicles/{id}?enquire=<intent>` opens that vehicle's
@@ -24,9 +25,12 @@ export function defaultIntentFor(vehicle: Pick<Vehicle, "enableRequestPrice">): 
   return vehicle.enableRequestPrice ? "price" : "vehicle";
 }
 
-/** Link to a vehicle page with the enquiry pre-filled. */
-export function vehicleEnquiryHref(vehicleId: string, intent: EnquiryIntent = "vehicle"): string {
-  return `/vehicles/${encodeURIComponent(vehicleId)}?${ENQUIRY_PARAM}=${intent}`;
+/** Link to a vehicle page (SEO slug URL) with the enquiry pre-filled. */
+export function vehicleEnquiryHref(
+  vehicle: Pick<Vehicle, "id" | "slug">,
+  intent: EnquiryIntent = "vehicle",
+): string {
+  return `${vehiclePath(vehicle)}?${ENQUIRY_PARAM}=${intent}`;
 }
 
 type AdFields = Pick<

@@ -5,6 +5,7 @@ import { ArrowRight, Heart, Fuel, Gauge, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { vehiclePath } from "@/lib/vehicle-url";
 import { useEffect } from "react";
 import { defaultIntentFor, vehicleEnquiryHref } from "@/lib/enquiry-intent";
 import { SoldOutOverlay } from "@/components/vehicles/sold-out-stamp";
@@ -99,7 +100,7 @@ function VehicleCard({
             </p>
           </div>
           <div className="flex gap-2">
-            <Link href={`/vehicles/${vehicle.id}`}>
+            <Link href={vehiclePath(vehicle)}>
               <Button
                 variant="outline"
                 size="sm"
@@ -109,7 +110,7 @@ function VehicleCard({
               </Button>
             </Link>
             {vehicle.vehicleStatus !== "sold" && (
-              <Link href={vehicleEnquiryHref(vehicle.id, defaultIntentFor(vehicle))}>
+              <Link href={vehicleEnquiryHref(vehicle, defaultIntentFor(vehicle))}>
                 <Button
                   size="sm"
                   className="rounded-full btn-gradient text-xs gap-1"

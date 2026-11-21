@@ -18,7 +18,11 @@ import {
  * Settings lists) so choices are checked the same way the API checks them.
  */
 
-const MAX_YEAR = new Date().getFullYear() + 1;
+/**
+ * Next model year. Read lazily inside the test (not at module load) — reading the
+ * clock while a page prerenders makes Next.js defer that page to the browser.
+ */
+const maxYear = () => new Date().getFullYear() + 1;
 
 /** Resolver context: the admin Settings lists the API validates against. */
 export interface VehicleSchemaContext {
@@ -39,7 +43,10 @@ const inList = (label: string, key: keyof VehicleSchemaContext) =>
 
 export const vehicleSchema = yup.object({
   // ── Attributes tab ──
-  year: requiredInt("Year", { min: 1900, max: MAX_YEAR }),
+  year: requiredInt("Year", { min: 1900 }).test("max-year", function (v) {
+    const max = maxYear();
+    return !v || Number(v.replace(/,/g, "")) <= max || this.createError({ message: `Year must be ${max} or less` });
+  }),
   make: requiredText("Make", 60).test("in-settings", "", inList("Make", "makes")),
   model: requiredText("Model", 80),
   variant: optionalText("Variant", 160),

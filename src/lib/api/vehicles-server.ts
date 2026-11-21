@@ -1,9 +1,10 @@
 "use cache";
 
 /**
- * Server-side vehicle reads for Server Components (e.g. /vehicles/[id]).
- * Cached with Cache Components so pages can be prerendered and revalidated;
- * results refresh every few minutes, so admin edits show up shortly after saving.
+ * Server-side vehicle reads for Server Components and metadata routes
+ * (/vehicles/[slug], sitemap.xml). Cached with Cache Components so pages can be
+ * prerendered; results refresh every few minutes, so admin edits show up shortly
+ * after saving.
  */
 import { cacheLife, cacheTag } from "next/cache";
 import { toVehicle } from "@/redux/vehicles/vehiclesApi";
@@ -24,6 +25,15 @@ async function getJson<T>(path: string): Promise<T | null> {
   }
 }
 
+/** By SEO slug. A renamed vehicle's old slug still resolves — compare `slug` to redirect. */
+export async function getVehicleBySlug(slug: string): Promise<Vehicle | null> {
+  cacheLife("minutes");
+  cacheTag("vehicles", `vehicle-slug-${slug}`);
+  const raw = await getJson<Vehicle>(`/vehicles/slug/${encodeURIComponent(slug)}`);
+  return raw ? toVehicle(raw) : null;
+}
+
+/** By id (UUID) — used to redirect old /vehicles/{id} links. */
 export async function getVehicle(id: string): Promise<Vehicle | null> {
   cacheLife("minutes");
   cacheTag("vehicles", `vehicle-${id}`);
@@ -38,14 +48,30 @@ export async function getSimilarVehicles(id: string): Promise<Vehicle[]> {
   return (raw ?? []).map(toVehicle);
 }
 
-/** IDs to prerender at build time — the featured cars plus the newest stock. */
-export async function getPrerenderVehicleIds(limit = 12): Promise<string[]> {
+/** Slugs to prerender at build time — the featured cars plus the newest stock. */
+export async function getPrerenderVehicleSlugs(limit = 12): Promise<string[]> {
   cacheLife("hours");
   cacheTag("vehicles");
   const [featured, newest] = await Promise.all([
     getJson<Vehicle[]>(`/vehicles/featured?limit=${limit}`),
     getJson<Paginated<Vehicle>>(`/vehicles?sortBy=newest&limit=${limit}`),
   ]);
-  const ids = [...(featured ?? []), ...(newest?.data ?? [])].map((v) => v.id);
-  return [...new Set(ids)].slice(0, limit);
+  const slugs = [...(featured ?? []), ...(newest?.data ?? [])]
+    .map((v) => v.slug)
+    .filter((s): s is string => !!s);
+  return [...new Set(slugs)].slice(0, limit);
+}
+
+export interface SitemapVehicle {
+  slug: string;
+  updatedAt: string;
+  vehicleStatus: "sold" | "unsold";
+  image: string | null;
+}
+
+/** Every vehicle URL for sitemap.xml. */
+export async function getSitemapVehicles(): Promise<SitemapVehicle[]> {
+  cacheLife("hours");
+  cacheTag("vehicles");
+  return (await getJson<SitemapVehicle[]>("/vehicles/sitemap")) ?? [];
 }

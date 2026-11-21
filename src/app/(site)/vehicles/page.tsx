@@ -30,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import Link from "next/link";
+import { vehiclePath } from "@/lib/vehicle-url";
 import { defaultIntentFor, vehicleEnquiryHref } from "@/lib/enquiry-intent";
 import { SoldOutOverlay } from "@/components/vehicles/sold-out-stamp";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
@@ -765,7 +766,7 @@ function VehiclesContent() {
                     >
                       {/* Image */}
                       <Link
-                        href={`/vehicles/${vehicle.id}`}
+                        href={vehiclePath(vehicle)}
                         className={`relative overflow-hidden block ${viewMode === "list" ? "w-72 shrink-0" : "aspect-[16/10]"}`}
                       >
                         {vehicle.image ? (
@@ -803,7 +804,7 @@ function VehiclesContent() {
 
                       {/* Content */}
                       <div className="p-5 flex-1">
-                        <Link href={`/vehicles/${vehicle.id}`}>
+                        <Link href={vehiclePath(vehicle)}>
                           <h3 className="font-semibold text-white text-lg hover:text-orange transition-colors">
                             {vehicle.make} {vehicle.model}
                           </h3>
@@ -858,7 +859,7 @@ function VehiclesContent() {
                             )}
                           </div>
                           <div className="flex gap-2">
-                            <Link href={`/vehicles/${vehicle.id}`}>
+                            <Link href={vehiclePath(vehicle)}>
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -868,7 +869,7 @@ function VehiclesContent() {
                               </Button>
                             </Link>
                             {vehicle.vehicleStatus !== "sold" && (
-                              <Link href={vehicleEnquiryHref(vehicle.id, defaultIntentFor(vehicle))}>
+                              <Link href={vehicleEnquiryHref(vehicle, defaultIntentFor(vehicle))}>
                                 <Button
                                   size="sm"
                                   className="rounded-full btn-gradient text-xs gap-1"

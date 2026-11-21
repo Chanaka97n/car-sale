@@ -1,8 +1,7 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SoldOutOverlay } from "@/components/vehicles/sold-out-stamp";
-import { useSearchParams } from "next/navigation";
 import {
   defaultIntentFor,
   ENQUIRY_PARAM,
@@ -65,6 +64,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
+import { vehiclePath } from "@/lib/vehicle-url";
 import type { Vehicle } from "@/lib/data";
 import type { AppDispatch } from "@/redux/store";
 import { Controller, useForm } from "react-hook-form";
@@ -94,15 +94,25 @@ interface IntentRequest {
 }
 
 /**
- * Reads `?enquire=` from the URL (set by "Enquire" links on the listing / home page).
- * Isolated in its own <Suspense> so the rest of the vehicle page stays prerendered.
+ * Reads `?enquire=` from the URL (set by "Enquire" links on the listing / home page)
+ * once the page is in the browser. Deliberately reads `window.location` in an effect
+ * rather than `useSearchParams()`: that hook makes the prerender bail out to
+ * client rendering, which would drop the vehicle content (and its JSON-LD) from the
+ * server HTML that search engines index. Re-runs when navigating to another vehicle.
  */
-function EnquiryIntentListener({ onIntent }: { onIntent: (intent: EnquiryIntent) => void }) {
-  const raw = useSearchParams().get(ENQUIRY_PARAM);
+function EnquiryIntentListener({
+  vehicleId,
+  onIntent,
+}: {
+  vehicleId: string;
+  onIntent: (intent: EnquiryIntent) => void;
+}) {
   useEffect(() => {
-    const intent = parseEnquiryIntent(raw);
+    const intent = parseEnquiryIntent(
+      new URLSearchParams(window.location.search).get(ENQUIRY_PARAM),
+    );
     if (intent) onIntent(intent);
-  }, [raw, onIntent]);
+  }, [vehicleId, onIntent]);
   return null;
 }
 
@@ -832,7 +842,7 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
                   transition={{ delay: i * 0.1 }}
                 >
                   <Link
-                    href={`/vehicles/${v.id}`}
+                    href={vehiclePath(v)}
                     className="group block bg-surface rounded-2xl border border-white/5 overflow-hidden hover:border-orange/20 transition-all duration-500"
                   >
                     <div className="relative aspect-[16/10] overflow-hidden">
@@ -891,9 +901,7 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
         dispatch={dispatch}
       />
 
-      <Suspense fallback={null}>
-        <EnquiryIntentListener onIntent={applyIntent} />
-      </Suspense>
+      <EnquiryIntentListener vehicleId={vehicle.id} onIntent={applyIntent} />
     </>
   );
 }
@@ -1330,7 +1338,11 @@ function TestDriveModal({
                 <Input
                   id="td-date"
                   type="date"
-                  min={todayIso()}
+                  // Set on focus, not during render: reading the clock while the page
+                  // prerenders would push the whole vehicle page to client rendering.
+                  onFocus={(e) => {
+                    e.currentTarget.min = todayIso();
+                  }}
                   {...register("preferredDate")}
                   {...fieldAria("td-date", errors.preferredDate?.message)}
                   className="rounded-xl bg-white/5 border-white/10 text-white"

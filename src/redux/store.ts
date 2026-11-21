@@ -3,6 +3,7 @@ import { vehiclesReducer } from "./vehicles/vehiclesIndex";
 import { authReducer } from "./admin/auth/authIndex";
 import { usersReducer } from "./admin/users/usersIndex";
 import { settingsReducer } from "./admin/settings/settingsIndex";
+import { enquiriesReducer } from "./admin/enquiries/enquiriesIndex";
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     auth: authReducer,
     users: usersReducer,
     settings: settingsReducer,
+    enquiries: enquiriesReducer,
   },
 });
 

@@ -3,6 +3,7 @@
 import { useAppSelector } from "@/redux/hooks";
 import { selectUser } from "@/redux/admin/auth/authIndex";
 import { selectUsers } from "@/redux/admin/users/usersIndex";
+import { selectEnquiries, selectNewEnquiriesCount } from "@/redux/admin/enquiries/enquiriesIndex";
 import Link from "next/link";
 import {
   Car,
@@ -17,6 +18,7 @@ import {
   Plus,
   Settings,
   BarChart3,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, getFuelVariant } from "@/components/admin/status-badge";
@@ -25,6 +27,8 @@ export default function AdminDashboardPage() {
   const user = useAppSelector(selectUser);
   const allVehicles = useAppSelector((s) => s.vehicles.allVehicles);
   const users = useAppSelector(selectUsers);
+  const enquiries = useAppSelector(selectEnquiries);
+  const newEnquiriesCount = useAppSelector(selectNewEnquiriesCount);
 
   const totalValue = allVehicles.reduce((sum, v) => sum + v.price, 0);
   const avgPrice = allVehicles.length > 0 ? totalValue / allVehicles.length : 0;
@@ -81,11 +85,11 @@ export default function AdminDashboardPage() {
       borderColor: "border-blue-500/20",
     },
     {
-      label: "Active Users",
-      value: activeUsers,
-      icon: Users,
-      trend: `${users.length} total`,
-      trendUp: activeUsers === users.length,
+      label: "Enquiries",
+      value: enquiries.length,
+      icon: MessageSquare,
+      trend: `${newEnquiriesCount} new`,
+      trendUp: newEnquiriesCount > 0,
       color: "text-purple-400",
       bgColor: "bg-purple-500/10",
       borderColor: "border-purple-500/20",
@@ -298,7 +302,22 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Link href="/admin/enquiries" className="group bg-surface rounded-xl border border-white/5 hover:border-purple-500/20 p-5 transition-all">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors relative">
+              <MessageSquare className="w-5 h-5 text-purple-400" />
+              {newEnquiriesCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {newEnquiriesCount}
+                </span>
+              )}
+            </div>
+            <ArrowUpRight className="w-4 h-4 text-zinc-600 ml-auto group-hover:text-purple-400 transition-colors" />
+          </div>
+          <h3 className="text-sm font-semibold text-white">Enquiries</h3>
+          <p className="text-xs text-zinc-500 mt-1">View and manage customer enquiries</p>
+        </Link>
         <Link href="/admin/vehicles" className="group bg-surface rounded-xl border border-white/5 hover:border-orange/20 p-5 transition-all">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-xl bg-orange/10 border border-orange/20 flex items-center justify-center group-hover:bg-orange/20 transition-colors">
@@ -319,12 +338,12 @@ export default function AdminDashboardPage() {
           <h3 className="text-sm font-semibold text-white">Manage Users</h3>
           <p className="text-xs text-zinc-500 mt-1">Control team access and permissions</p>
         </Link>
-        <Link href="/admin/settings" className="group bg-surface rounded-xl border border-white/5 hover:border-purple-500/20 p-5 transition-all">
+        <Link href="/admin/settings" className="group bg-surface rounded-xl border border-white/5 hover:border-emerald-500/20 p-5 transition-all">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
-              <Settings className="w-5 h-5 text-purple-400" />
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+              <Settings className="w-5 h-5 text-emerald-400" />
             </div>
-            <ArrowUpRight className="w-4 h-4 text-zinc-600 ml-auto group-hover:text-purple-400 transition-colors" />
+            <ArrowUpRight className="w-4 h-4 text-zinc-600 ml-auto group-hover:text-emerald-400 transition-colors" />
           </div>
           <h3 className="text-sm font-semibold text-white">Settings</h3>
           <p className="text-xs text-zinc-500 mt-1">Configure dropdown options and preferences</p>

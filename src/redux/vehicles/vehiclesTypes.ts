@@ -6,6 +6,7 @@ export interface Vehicle {
   year: number;
   mileage: number;
   price: number;
+  salePrice?: number;
   monthlyPrice: number;
   fuelType: "Petrol" | "Diesel" | "Hybrid" | "Plug-in Hybrid" | "Electric";
   transmission: "Automatic" | "Manual";
@@ -14,10 +15,16 @@ export interface Vehicle {
   image: string;
   images?: string[];
   featured?: boolean;
+  stockNumber?: string;
+  vinNumber?: string;
+  trim?: string;
+  condition?: string;
   engineSize?: string;
-  doors?: number;
-  colour?: string;
   drivetrain?: string;
+  fuelEconomy?: string;
+  exteriorColor?: string;
+  interiorColor?: string;
+  doors?: number;
   seats?: number;
   topSpeed?: number;
   acceleration?: string;
@@ -28,6 +35,18 @@ export interface Vehicle {
   serviceHistory?: string;
   features?: string[];
   description?: string;
+  taxLabel?: string;
+  brochureUrl?: string;
+  videoUrl?: string;
+  vehicleStatus?: "sold" | "unsold";
+  enableRequestPrice?: boolean;
+  vehicleOverview?: string;
+  featuresAndOptions?: string;
+  technicalSpecs?: string;
+  generalInfo?: string;
+  vehicleLocation?: string;
+  reviewStamps?: string[];
+  colour?: string;
 }
 
 export interface VehicleFilters {

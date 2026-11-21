@@ -12,6 +12,7 @@ import {
   ArrowRight,
   Send,
   ChevronDown,
+  CheckCircle2,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -36,6 +37,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { useAppSelector, useAppDispatch } from "@/redux/hooks";
+import { addEnquiry } from "@/redux/admin/enquiries/enquiriesIndex";
 
 const contactMethods = [
   {
@@ -119,9 +122,48 @@ const enquiryTypes = [
 ];
 
 export default function ContactPage() {
+  const dispatch = useAppDispatch();
+  const allVehicles = useAppSelector((s) => s.vehicles.allVehicles);
+
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [dateOpen, setDateOpen] = useState(false);
   const [disableBefore, setDisableBefore] = useState<Date | undefined>(undefined);
+
+  const [bookingForm, setBookingForm] = useState({
+    vehicle: "",
+    time: "",
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    message: "",
+    marketing: false,
+  });
+  const [bookingSubmitted, setBookingSubmitted] = useState(false);
+
+  const handleBookingSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bookingForm.firstName || !bookingForm.email || !bookingForm.phone) return;
+    const selectedVehicle = allVehicles.find((v) => v.id === bookingForm.vehicle);
+    dispatch(
+      addEnquiry({
+        type: "test-drive",
+        firstName: bookingForm.firstName,
+        lastName: bookingForm.lastName,
+        email: bookingForm.email,
+        phone: bookingForm.phone,
+        message: bookingForm.message || "I'd like to book a test drive.",
+        vehicleId: bookingForm.vehicle || undefined,
+        vehicleLabel: selectedVehicle
+          ? `${selectedVehicle.make} ${selectedVehicle.model} ${selectedVehicle.variant}`
+          : undefined,
+        preferredDate: date ? date.toISOString().split("T")[0] : undefined,
+        preferredTime: bookingForm.time || undefined,
+        marketingConsent: bookingForm.marketing,
+      })
+    );
+    setBookingSubmitted(true);
+  };
 
   return (
     <>
@@ -201,22 +243,46 @@ export default function ContactPage() {
                   time that suits you.
                 </p>
 
-                <form className="space-y-5">
+                {bookingSubmitted ? (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-2">Booking Received!</h3>
+                    <p className="text-zinc-400">
+                      We&apos;ll confirm your test drive shortly.
+                    </p>
+                    <Button
+                      className="mt-6 btn-gradient rounded-full px-8"
+                      onClick={() => {
+                        setBookingSubmitted(false);
+                        setBookingForm({ vehicle: "", time: "", firstName: "", lastName: "", email: "", phone: "", message: "", marketing: false });
+                        setDate(undefined);
+                      }}
+                    >
+                      Book Another
+                    </Button>
+                  </div>
+                ) : (
+                <form className="space-y-5" onSubmit={handleBookingSubmit}>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <Label className="text-xs text-zinc-400 mb-1.5 block">
                         Vehicle (Optional)
                       </Label>
-                      <Select>
+                      <Select
+                        value={bookingForm.vehicle}
+                        onValueChange={(val) => setBookingForm((p) => ({ ...p, vehicle: val ?? "" }))}
+                      >
                         <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white">
                           <SelectValue placeholder="Select a Vehicle" />
                         </SelectTrigger>
                         <SelectContent className="bg-surface border-white/10">
-                          <SelectItem value="merc-s">
-                            Mercedes S-Class
-                          </SelectItem>
-                          <SelectItem value="bmw-x3">BMW X3</SelectItem>
-                          <SelectItem value="audi-a4">Audi A4</SelectItem>
+                          {allVehicles.filter((v) => v.vehicleStatus !== "sold").map((v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {v.make} {v.model} {v.variant}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -263,7 +329,10 @@ export default function ContactPage() {
                       <Label className="text-xs text-zinc-400 mb-1.5 block">
                         Preferred Time
                       </Label>
-                      <Select>
+                      <Select
+                        value={bookingForm.time}
+                        onValueChange={(val) => setBookingForm((p) => ({ ...p, time: val ?? "" }))}
+                      >
                         <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white">
                           <SelectValue placeholder="Select a Time" />
                         </SelectTrigger>
@@ -295,6 +364,9 @@ export default function ContactPage() {
                       </Label>
                       <Input
                         placeholder="e.g. James"
+                        value={bookingForm.firstName}
+                        onChange={(e) => setBookingForm((p) => ({ ...p, firstName: e.target.value }))}
+                        required
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
                     </div>
@@ -304,6 +376,9 @@ export default function ContactPage() {
                       </Label>
                       <Input
                         placeholder="e.g. Mitchell"
+                        value={bookingForm.lastName}
+                        onChange={(e) => setBookingForm((p) => ({ ...p, lastName: e.target.value }))}
+                        required
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
                     </div>
@@ -314,6 +389,9 @@ export default function ContactPage() {
                       <Input
                         type="email"
                         placeholder="e.g. james@email.com"
+                        value={bookingForm.email}
+                        onChange={(e) => setBookingForm((p) => ({ ...p, email: e.target.value }))}
+                        required
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
                     </div>
@@ -327,6 +405,9 @@ export default function ContactPage() {
                       <Input
                         type="tel"
                         placeholder="e.g. 07700 900123"
+                        value={bookingForm.phone}
+                        onChange={(e) => setBookingForm((p) => ({ ...p, phone: e.target.value }))}
+                        required
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
                     </div>
@@ -336,6 +417,8 @@ export default function ContactPage() {
                       </Label>
                       <Input
                         placeholder="Any specific vehicle, features or questions?"
+                        value={bookingForm.message}
+                        onChange={(e) => setBookingForm((p) => ({ ...p, message: e.target.value }))}
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
                     </div>
@@ -344,6 +427,8 @@ export default function ContactPage() {
                   <div className="flex items-start gap-2.5">
                     <Checkbox
                       id="marketing"
+                      checked={bookingForm.marketing}
+                      onCheckedChange={(checked) => setBookingForm((p) => ({ ...p, marketing: checked === true }))}
                       className="mt-0.5 border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
                     />
                     <Label
@@ -355,12 +440,13 @@ export default function ContactPage() {
                     </Label>
                   </div>
 
-                  <Button className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold">
+                  <Button type="submit" className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold">
                     <Send className="w-4 h-4" />
                     Book My Test Drive
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </form>
+                )}
               </div>
             </div>
           </motion.div>

@@ -1,7 +1,13 @@
 import { errorMessage, type Paginated } from "@/lib/api/client";
 import { createAppAsyncThunk } from "../createAppAsyncThunk";
-import { filtersToQuery, uploadPendingImages, vehiclesApi } from "./vehiclesApi";
-import type { Vehicle, VehicleInput } from "./vehiclesTypes";
+import {
+  filtersToFacetsQuery,
+  filtersToQuery,
+  priceSliderMax,
+  uploadPendingImages,
+  vehiclesApi,
+} from "./vehiclesApi";
+import type { Vehicle, VehicleFacets, VehicleInput } from "./vehiclesTypes";
 
 // ── Public ──────────────────────────────────────────────────────────────
 
@@ -12,11 +18,28 @@ import type { Vehicle, VehicleInput } from "./vehiclesTypes";
 export const fetchVehicles = createAppAsyncThunk<Paginated<Vehicle>, void>(
   "vehicles/fetchPage",
   async (_, { getState, signal, rejectWithValue }) => {
-    const { filters, currentPage, pageSize } = getState().vehicles;
+    const { filters, currentPage, pageSize, facets } = getState().vehicles;
+    const query = filtersToQuery(filters, currentPage, pageSize, priceSliderMax(facets));
     try {
-      return await vehiclesApi.list(filtersToQuery(filters, currentPage, pageSize), signal);
+      return await vehiclesApi.list(query, signal);
     } catch (err) {
       return rejectWithValue(errorMessage(err, "Could not load vehicles"));
+    }
+  },
+);
+
+/**
+ * GET /vehicles/facets — price/year bounds and per-option counts for the
+ * current filters. Dispatch alongside `fetchVehicles` when filters change.
+ */
+export const fetchVehicleFacets = createAppAsyncThunk<VehicleFacets, void>(
+  "vehicles/fetchFacets",
+  async (_, { getState, signal, rejectWithValue }) => {
+    const { filters, facets } = getState().vehicles;
+    try {
+      return await vehiclesApi.facets(filtersToFacetsQuery(filters, priceSliderMax(facets)), signal);
+    } catch (err) {
+      return rejectWithValue(errorMessage(err));
     }
   },
 );

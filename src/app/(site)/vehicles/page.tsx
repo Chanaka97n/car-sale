@@ -54,7 +54,12 @@ import {
   selectStatus,
   initialFilters,
   selectVehiclesError,
+  selectVehicleFacets,
+  selectPriceSliderMax,
+  fetchVehicleFacets,
   type VehicleFilters,
+  type VehicleFacets,
+  type FacetCount,
 } from "@/redux/vehicles/vehiclesIndex";
 import {
   fetchSettings,
@@ -137,6 +142,93 @@ function searchParamsToFilters(params: URLSearchParams): Partial<VehicleFilters>
   return result;
 }
 
+// --- Facet helpers ---
+
+interface OptionWithCount {
+  name: string;
+  /** undefined until facets have loaded */
+  count?: number;
+}
+
+/**
+ * Admin Settings define the option order; facet counts come from live stock.
+ * Values present in stock but missing from Settings are appended so nothing is hidden.
+ */
+function withCounts(options: string[], counts: FacetCount[] | undefined): OptionWithCount[] {
+  if (!counts) return options.map((name) => ({ name }));
+  const byName = new Map(counts.map((c) => [c.name.toLowerCase(), c.count]));
+  const merged: OptionWithCount[] = options.map((name) => ({
+    name,
+    count: byName.get(name.toLowerCase()) ?? 0,
+  }));
+  const known = new Set(options.map((o) => o.toLowerCase()));
+  for (const c of counts) if (!known.has(c.name.toLowerCase())) merged.push(c);
+  return merged;
+}
+
+/** Years available in stock (newest first), always including any year already selected. */
+function yearOptions(facets: VehicleFacets | null, selected: string[]): number[] {
+  const current = new Date().getFullYear();
+  const max = facets?.year.max ?? current;
+  const min = facets?.year.min ?? current - 5;
+  const years = new Set<number>();
+  for (let y = max; y >= min; y--) years.add(y);
+  for (const s of selected) if (s) years.add(parseInt(s, 10));
+  return [...years].filter((y) => !Number.isNaN(y)).sort((a, b) => b - a);
+}
+
+function CountBadge({ count }: { count?: number }) {
+  if (count === undefined) return null;
+  return <span className="ml-auto text-xs tabular-nums text-zinc-600">{count}</span>;
+}
+
+function CheckboxGroup({
+  title,
+  idPrefix,
+  options,
+  selected,
+  onToggle,
+}: {
+  title: string;
+  idPrefix: string;
+  options: OptionWithCount[];
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-white mb-3">{title}</h3>
+      <div className="space-y-2.5">
+        {options.map(({ name, count }) => {
+          const id = `${idPrefix}-${name}`;
+          const checked = selected.includes(name);
+          // Options with no matching stock are dimmed but stay clickable.
+          const empty = count === 0 && !checked;
+          return (
+            <div key={name} className="flex items-center gap-2.5">
+              <Checkbox
+                id={id}
+                checked={checked}
+                onCheckedChange={() => onToggle(name)}
+                className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
+              />
+              <Label
+                htmlFor={id}
+                className={`flex flex-1 items-center text-sm cursor-pointer ${
+                  empty ? "text-zinc-600" : "text-zinc-400"
+                }`}
+              >
+                {name}
+                <CountBadge count={count} />
+              </Label>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // --- Filter sidebar ---
 
 function FilterSidebar({ className = "" }: { className?: string }) {
@@ -146,6 +238,19 @@ function FilterSidebar({ className = "" }: { className?: string }) {
   const fuelTypes = useAppSelector(selectFuelTypes);
   const bodyTypes = useAppSelector(selectBodyTypes);
   const transmissions = useAppSelector(selectTransmissions);
+  const facets = useAppSelector(selectVehicleFacets);
+  const sliderMax = useAppSelector(selectPriceSliderMax);
+
+  const makeOptions = withCounts(makes, facets?.makes);
+  const fuelOptions = withCounts(fuelTypes, facets?.fuelTypes);
+  const transmissionOptions = withCounts(transmissions, facets?.transmissions);
+  const bodyOptions = withCounts(bodyTypes, facets?.bodyTypes);
+  const years = yearOptions(facets, [filters.yearFrom, filters.yearTo]);
+
+  // A stored max at/above the slider top means "no limit".
+  const priceLow = Math.min(filters.priceRange[0], sliderMax);
+  const priceHigh = Math.min(filters.priceRange[1], sliderMax);
+  const priceUnlimited = filters.priceRange[1] >= sliderMax;
 
   return (
     <div className={className}>
@@ -180,22 +285,27 @@ function FilterSidebar({ className = "" }: { className?: string }) {
             </SelectTrigger>
             <SelectContent className="bg-surface border-white/10">
               <SelectItem value="all">Any Make</SelectItem>
-              {makes.map((make) => (
-                <SelectItem key={make} value={make.toLowerCase()}>
-                  {make}
+              {makeOptions.map(({ name, count }) => (
+                <SelectItem key={name} value={name.toLowerCase()}>
+                  <span className="flex w-full items-center gap-2">
+                    {name}
+                    {count !== undefined && (
+                      <span className="text-xs text-zinc-500">({count})</span>
+                    )}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        {/* Price Range */}
+        {/* Price Range — bounds come from the stock via GET /vehicles/facets */}
         <div>
           <h3 className="text-sm font-semibold text-white mb-3">
             Price Range
           </h3>
           <Slider
-            value={filters.priceRange as unknown as number[]}
+            value={[priceLow, priceHigh]}
             onValueChange={(val) =>
               dispatch(
                 setPriceRange(
@@ -204,18 +314,21 @@ function FilterSidebar({ className = "" }: { className?: string }) {
               )
             }
             min={0}
-            max={150000}
+            max={sliderMax}
             step={1000}
             className="mb-4"
           />
           <div className="flex items-center gap-2 text-sm text-zinc-400">
-            <span>&pound;{filters.priceRange[0].toLocaleString()}</span>
+            <span>&pound;{priceLow.toLocaleString()}</span>
             <span className="text-zinc-600">to</span>
-            <span>&pound;{filters.priceRange[1].toLocaleString()}</span>
+            <span>
+              &pound;{priceHigh.toLocaleString()}
+              {priceUnlimited && "+"}
+            </span>
           </div>
         </div>
 
-        {/* Year */}
+        {/* Year — range of model years in stock */}
         <div>
           <h3 className="text-sm font-semibold text-white mb-3">Year</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -230,7 +343,7 @@ function FilterSidebar({ className = "" }: { className?: string }) {
               </SelectTrigger>
               <SelectContent className="bg-surface border-white/10">
                 <SelectItem value="any">Any</SelectItem>
-                {[2020, 2021, 2022, 2023, 2024].map((year) => (
+                {years.map((year) => (
                   <SelectItem key={year} value={year.toString()}>
                     {year}
                   </SelectItem>
@@ -248,7 +361,7 @@ function FilterSidebar({ className = "" }: { className?: string }) {
               </SelectTrigger>
               <SelectContent className="bg-surface border-white/10">
                 <SelectItem value="any">Any</SelectItem>
-                {[2020, 2021, 2022, 2023, 2024].map((year) => (
+                {years.map((year) => (
                   <SelectItem key={year} value={year.toString()}>
                     {year}
                   </SelectItem>
@@ -258,76 +371,27 @@ function FilterSidebar({ className = "" }: { className?: string }) {
           </div>
         </div>
 
-        {/* Fuel Type */}
-        <div>
-          <h3 className="text-sm font-semibold text-white mb-3">Fuel Type</h3>
-          <div className="space-y-2.5">
-            {fuelTypes.map((fuel) => (
-              <div key={fuel} className="flex items-center gap-2.5">
-                <Checkbox
-                  id={`fuel-${fuel}`}
-                  checked={filters.fuelTypes.includes(fuel)}
-                  onCheckedChange={() => dispatch(toggleFuelType(fuel))}
-                  className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
-                />
-                <Label
-                  htmlFor={`fuel-${fuel}`}
-                  className="text-sm text-zinc-400 cursor-pointer"
-                >
-                  {fuel}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Transmission */}
-        <div>
-          <h3 className="text-sm font-semibold text-white mb-3">
-            Transmission
-          </h3>
-          <div className="space-y-2.5">
-            {transmissions.map((trans) => (
-              <div key={trans} className="flex items-center gap-2.5">
-                <Checkbox
-                  id={`trans-${trans}`}
-                  checked={filters.transmissions.includes(trans)}
-                  onCheckedChange={() => dispatch(toggleTransmission(trans))}
-                  className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
-                />
-                <Label
-                  htmlFor={`trans-${trans}`}
-                  className="text-sm text-zinc-400 cursor-pointer"
-                >
-                  {trans}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Body Type */}
-        <div>
-          <h3 className="text-sm font-semibold text-white mb-3">Body Type</h3>
-          <div className="space-y-2.5">
-            {bodyTypes.map((type) => (
-              <div key={type} className="flex items-center gap-2.5">
-                <Checkbox
-                  id={`body-${type}`}
-                  checked={filters.bodyTypes.includes(type)}
-                  onCheckedChange={() => dispatch(toggleBodyType(type))}
-                  className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
-                />
-                <Label
-                  htmlFor={`body-${type}`}
-                  className="text-sm text-zinc-400 cursor-pointer"
-                >
-                  {type}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </div>
+        <CheckboxGroup
+          title="Fuel Type"
+          idPrefix="fuel"
+          options={fuelOptions}
+          selected={filters.fuelTypes}
+          onToggle={(v) => dispatch(toggleFuelType(v))}
+        />
+        <CheckboxGroup
+          title="Transmission"
+          idPrefix="trans"
+          options={transmissionOptions}
+          selected={filters.transmissions}
+          onToggle={(v) => dispatch(toggleTransmission(v))}
+        />
+        <CheckboxGroup
+          title="Body Type"
+          idPrefix="body"
+          options={bodyOptions}
+          selected={filters.bodyTypes}
+          onToggle={(v) => dispatch(toggleBodyType(v))}
+        />
       </div>
     </div>
   );
@@ -397,6 +461,18 @@ function VehiclesContent() {
       request?.abort();
     };
   }, [filters, currentPage, dispatch]);
+
+  // Sidebar counts/bounds depend on filters only (not the page number).
+  useEffect(() => {
+    let request: { abort: () => void } | undefined;
+    const timer = setTimeout(() => {
+      request = dispatch(fetchVehicleFacets());
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      request?.abort();
+    };
+  }, [filters, dispatch]);
 
   // Filter option lists (makes, fuel types, …) come from the admin Settings.
   useEffect(() => {
@@ -614,15 +690,41 @@ function VehiclesContent() {
                         href={`/vehicles/${vehicle.id}`}
                         className={`relative overflow-hidden block ${viewMode === "list" ? "w-72 shrink-0" : "aspect-[16/10]"}`}
                       >
-                        <img
-                          src={vehicle.image}
-                          alt={`${vehicle.make} ${vehicle.model}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                        />
+                        {vehicle.image ? (
+                          <img
+                            src={vehicle.image}
+                            alt={`${vehicle.make} ${vehicle.model}`}
+                            loading={i < 3 ? "eager" : "lazy"}
+                            className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ${
+                              vehicle.vehicleStatus === "sold" ? "grayscale-[60%]" : ""
+                            }`}
+                          />
+                        ) : (
+                          <div className="w-full h-full min-h-40 flex items-center justify-center bg-white/5 text-zinc-600 text-sm">
+                            Image coming soon
+                          </div>
+                        )}
                         <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
-                        <Badge className="absolute top-3 left-3 bg-orange/90 text-white border-0 rounded-full text-xs">
-                          {vehicle.year}
-                        </Badge>
+                        <div className="absolute top-3 left-3 flex gap-2">
+                          <Badge className="bg-orange/90 text-white border-0 rounded-full text-xs">
+                            {vehicle.year}
+                          </Badge>
+                          {vehicle.featured && vehicle.vehicleStatus !== "sold" && (
+                            <Badge className="bg-black/60 text-orange border border-orange/30 rounded-full text-xs backdrop-blur-sm">
+                              Featured
+                            </Badge>
+                          )}
+                        </div>
+                        {vehicle.vehicleStatus === "sold" && (
+                          <Badge className="absolute top-3 right-3 bg-red-500/90 text-white border-0 rounded-full text-xs uppercase tracking-wide">
+                            Sold
+                          </Badge>
+                        )}
+                        {vehicle.salePrice && vehicle.vehicleStatus !== "sold" ? (
+                          <Badge className="absolute top-3 right-3 bg-emerald-500/90 text-white border-0 rounded-full text-xs">
+                            Save &pound;{(vehicle.price - vehicle.salePrice).toLocaleString()}
+                          </Badge>
+                        ) : null}
                       </Link>
 
                       {/* Content */}
@@ -645,24 +747,41 @@ function VehiclesContent() {
                             <Gauge className="w-3.5 h-3.5" />
                             {vehicle.transmission}
                           </span>
-                          <span className="flex items-center gap-1.5">
-                            <Zap className="w-3.5 h-3.5" />
-                            {vehicle.horsepower} hp
-                          </span>
+                          {vehicle.horsepower > 0 && (
+                            <span className="flex items-center gap-1.5">
+                              <Zap className="w-3.5 h-3.5" />
+                              {vehicle.horsepower} hp
+                            </span>
+                          )}
                         </div>
 
                         <p className="text-xs text-zinc-500 mt-2">
                           {vehicle.mileage.toLocaleString()} miles
+                          {vehicle.bodyType && <> &middot; {vehicle.bodyType}</>}
+                          {vehicle.vehicleLocation && <> &middot; {vehicle.vehicleLocation}</>}
                         </p>
 
                         <div className="flex items-end justify-between mt-4 pt-4 border-t border-white/5">
                           <div>
-                            <p className="text-xl font-bold text-white">
-                              &pound;{vehicle.price.toLocaleString()}
-                            </p>
-                            <p className="text-xs text-zinc-500">
-                              &pound;{vehicle.monthlyPrice}/mo*
-                            </p>
+                            {vehicle.salePrice ? (
+                              <p className="flex items-baseline gap-2">
+                                <span className="text-xl font-bold text-white">
+                                  &pound;{vehicle.salePrice.toLocaleString()}
+                                </span>
+                                <span className="text-sm text-zinc-500 line-through">
+                                  &pound;{vehicle.price.toLocaleString()}
+                                </span>
+                              </p>
+                            ) : (
+                              <p className="text-xl font-bold text-white">
+                                &pound;{vehicle.price.toLocaleString()}
+                              </p>
+                            )}
+                            {vehicle.monthlyPrice > 0 && (
+                              <p className="text-xs text-zinc-500">
+                                &pound;{vehicle.monthlyPrice.toLocaleString()}/mo*
+                              </p>
+                            )}
                           </div>
                           <div className="flex gap-2">
                             <Link href={`/vehicles/${vehicle.id}`}>
@@ -674,15 +793,17 @@ function VehiclesContent() {
                                 Details
                               </Button>
                             </Link>
-                            <Link href="/contact">
-                              <Button
-                                size="sm"
-                                className="rounded-full btn-gradient text-xs gap-1"
-                              >
-                                Enquire
-                                <ArrowRight className="w-3 h-3" />
-                              </Button>
-                            </Link>
+                            {vehicle.vehicleStatus !== "sold" && (
+                              <Link href={`/vehicles/${vehicle.id}`}>
+                                <Button
+                                  size="sm"
+                                  className="rounded-full btn-gradient text-xs gap-1"
+                                >
+                                  {vehicle.enableRequestPrice ? "Request Price" : "Enquire"}
+                                  <ArrowRight className="w-3 h-3" />
+                                </Button>
+                              </Link>
+                            )}
                           </div>
                         </div>
                       </div>

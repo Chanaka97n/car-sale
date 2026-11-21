@@ -5,7 +5,7 @@ import {
   type Paginated,
   type Query,
 } from "@/lib/api/client";
-import type { Vehicle, VehicleFilters, VehicleInput } from "./vehiclesTypes";
+import type { Vehicle, VehicleFacets, VehicleFilters, VehicleInput } from "./vehiclesTypes";
 import { initialFilters } from "./vehiclesTypes";
 
 /** API rows have `null` for empty columns and extra timestamps; normalise to the frontend type. */
@@ -15,15 +15,33 @@ export function toVehicle(raw: Vehicle & { createdAt?: string; updatedAt?: strin
   return { ...v, images, image: v.image || images[0] || "" };
 }
 
-/** Maps the vehicles-page filter state to GET /vehicles query params. */
-export function filtersToQuery(filters: VehicleFilters, page: number, limit: number): Query {
+const PRICE_STEP = 5000;
+
+/**
+ * Upper end of the price slider: the most expensive car rounded up to the next
+ * £5k. Falls back to the static default until facets have loaded.
+ */
+export function priceSliderMax(facets: VehicleFacets | null): number {
+  if (!facets || facets.price.max <= 0) return initialFilters.priceRange[1];
+  return Math.max(PRICE_STEP, Math.ceil(facets.price.max / PRICE_STEP) * PRICE_STEP);
+}
+
+/**
+ * Maps the vehicles-page filter state to GET /vehicles query params.
+ * A max price at (or beyond) the slider's top end means "no limit" and isn't sent.
+ */
+export function filtersToQuery(
+  filters: VehicleFilters,
+  page: number,
+  limit: number,
+  priceCeiling: number = initialFilters.priceRange[1],
+): Query {
   const [minPrice, maxPrice] = filters.priceRange;
   return {
     search: filters.search.trim() || undefined,
     make: filters.make || undefined,
-    // Only send price bounds the user actually moved, so cars above the slider max still show.
-    minPrice: minPrice !== initialFilters.priceRange[0] ? minPrice : undefined,
-    maxPrice: maxPrice !== initialFilters.priceRange[1] ? maxPrice : undefined,
+    minPrice: minPrice > 0 ? minPrice : undefined,
+    maxPrice: maxPrice < priceCeiling ? maxPrice : undefined,
     yearFrom: filters.yearFrom || undefined,
     yearTo: filters.yearTo || undefined,
     fuelTypes: filters.fuelTypes,
@@ -37,6 +55,15 @@ export function filtersToQuery(filters: VehicleFilters, page: number, limit: num
 
 /** Server-managed fields; the API rejects unknown properties on create/update. */
 const READ_ONLY_FIELDS = new Set(["id", "image", "createdAt", "updatedAt"]);
+
+/** Same filters as the listing, minus paging and sort (GET /vehicles/facets). */
+export function filtersToFacetsQuery(filters: VehicleFilters, priceCeiling?: number): Query {
+  const query = filtersToQuery(filters, 1, 1, priceCeiling);
+  delete query.page;
+  delete query.limit;
+  delete query.sortBy;
+  return query;
+}
 
 /** Strips fields the API doesn't accept on create/update. */
 function toBody(input: Partial<VehicleInput> & { id?: string }, { clearEmpty = false } = {}) {
@@ -62,6 +89,10 @@ export const vehiclesApi = {
     const res = await api.get<Paginated<ApiVehicle>>("/vehicles", query, { auth: false, signal });
     return { ...res, data: res.data.map(toVehicle) };
   },
+
+  /** Filter sidebar bounds + counts. Takes the same filters as `list` (paging/sort ignored). */
+  facets: (query: Query, signal?: AbortSignal) =>
+    api.get<VehicleFacets>("/vehicles/facets", query, { auth: false, signal }),
 
   listAll: async (query: Query = {}) =>
     (await fetchAllPages<ApiVehicle>("/vehicles", { sortBy: "newest", ...query })).map(toVehicle),

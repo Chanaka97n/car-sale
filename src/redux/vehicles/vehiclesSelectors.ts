@@ -1,4 +1,9 @@
 import type { RootState } from "../store";
+import { priceSliderMax } from "./vehiclesApi";
+
+export const selectVehicleFacets = (state: RootState) => state.vehicles.facets;
+/** Top of the price slider, derived from the most expensive car in stock. */
+export const selectPriceSliderMax = (state: RootState) => priceSliderMax(state.vehicles.facets);
 
 export const selectFilters = (state: RootState) => state.vehicles.filters;
 /** Current page of public results, already filtered/sorted/paginated by the API. */

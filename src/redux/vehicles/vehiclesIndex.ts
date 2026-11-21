@@ -16,6 +16,7 @@ export {
 } from "./vehiclesSlice";
 export {
   fetchVehicles,
+  fetchVehicleFacets,
   fetchAllVehicles,
   fetchFeaturedVehicles,
   fetchVehicleById,
@@ -27,9 +28,17 @@ export {
   setVehicleFeatured,
   setVehicleStatus,
 } from "./vehiclesThunks";
-export { vehiclesApi, toVehicle, filtersToQuery, uploadPendingImages } from "./vehiclesApi";
+export {
+  vehiclesApi,
+  toVehicle,
+  filtersToQuery,
+  priceSliderMax,
+  uploadPendingImages,
+} from "./vehiclesApi";
 export {
   selectFilters,
+  selectVehicleFacets,
+  selectPriceSliderMax,
   selectFilteredVehicles,
   selectCurrentPage,
   selectPageSize,
@@ -47,5 +56,12 @@ export {
   selectVehicleMutationStatus,
   selectVehicleMutationError,
 } from "./vehiclesSelectors";
-export type { Vehicle, VehicleInput, VehicleFilters, VehiclesState } from "./vehiclesTypes";
+export type {
+  Vehicle,
+  VehicleInput,
+  VehicleFilters,
+  VehicleFacets,
+  FacetCount,
+  VehiclesState,
+} from "./vehiclesTypes";
 export { initialFilters, MAKES, BODY_TYPES, FUEL_TYPES } from "./vehiclesTypes";

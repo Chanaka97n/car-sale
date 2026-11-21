@@ -6,6 +6,7 @@ import {
   fetchFeaturedVehicles,
   fetchSimilarVehicles,
   fetchVehicleById,
+  fetchVehicleFacets,
   fetchVehicles,
   setVehicleFeatured,
   setVehicleStatus,
@@ -27,6 +28,9 @@ const initialState: VehiclesState = {
   totalCount: 0,
   status: "idle",
   error: null,
+
+  facets: null,
+  facetsStatus: "idle",
 
   featured: [],
   featuredStatus: "idle",
@@ -139,6 +143,18 @@ const vehiclesSlice = createSlice({
         if (meta.aborted) return; // superseded by a newer request
         state.status = "failed";
         state.error = payload ?? "Could not load vehicles";
+      })
+
+      // Filter sidebar facets
+      .addCase(fetchVehicleFacets.pending, (state) => {
+        state.facetsStatus = "loading";
+      })
+      .addCase(fetchVehicleFacets.fulfilled, (state, { payload }) => {
+        state.facetsStatus = "succeeded";
+        state.facets = payload;
+      })
+      .addCase(fetchVehicleFacets.rejected, (state, { meta }) => {
+        if (!meta.aborted) state.facetsStatus = "failed";
       })
 
       // Full inventory

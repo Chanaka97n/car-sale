@@ -63,6 +63,26 @@ export interface VehicleFilters {
 
 type RequestStatus = "idle" | "loading" | "succeeded" | "failed";
 
+export interface FacetCount {
+  name: string;
+  count: number;
+}
+
+/** GET /vehicles/facets — data for the /vehicles filter sidebar. */
+export interface VehicleFacets {
+  /** Vehicles matching all current filters. */
+  total: number;
+  /** Bounds of the whole stock (customer price: sale price when set). */
+  price: { min: number; max: number };
+  year: { min: number | null; max: number | null };
+  maxMileage: number;
+  /** Per-option counts; each applies every other active filter but not its own. */
+  makes: FacetCount[];
+  fuelTypes: FacetCount[];
+  transmissions: FacetCount[];
+  bodyTypes: FacetCount[];
+}
+
 /** Create/update payload — `id` comes from the URL, `image` is derived from images[0] server-side. */
 export type VehicleInput = Omit<Vehicle, "id" | "image"> & { image?: string };
 
@@ -81,6 +101,10 @@ export interface VehiclesState {
   totalCount: number;
   status: RequestStatus;
   error: string | null;
+
+  /** Filter sidebar bounds + counts for the current filters. */
+  facets: VehicleFacets | null;
+  facetsStatus: RequestStatus;
 
   /** Home page featured cars. */
   featured: Vehicle[];

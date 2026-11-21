@@ -30,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import Link from "next/link";
+import { defaultIntentFor, vehicleEnquiryHref } from "@/lib/enquiry-intent";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import {
   setSearch,
@@ -870,7 +871,7 @@ function VehiclesContent() {
                               </Button>
                             </Link>
                             {vehicle.vehicleStatus !== "sold" && (
-                              <Link href={`/vehicles/${vehicle.id}`}>
+                              <Link href={vehicleEnquiryHref(vehicle.id, defaultIntentFor(vehicle))}>
                                 <Button
                                   size="sm"
                                   className="rounded-full btn-gradient text-xs gap-1"

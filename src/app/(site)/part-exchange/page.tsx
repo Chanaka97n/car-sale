@@ -21,10 +21,17 @@ import {
 } from "@/components/ui/select";
 import Link from "next/link";
 import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import { useAppDispatch } from "@/redux/hooks";
 import { addEnquiry } from "@/redux/admin/enquiries/enquiriesIndex";
-
-const emptyValuation = { registration: "", mileage: "", condition: "", name: "", phone: "" };
+import { FieldError, FormError, fieldAria } from "@/components/forms/form-errors";
+import {
+  partExchangeDefaults,
+  partExchangeSchema,
+  toInt,
+  type PartExchangeValues,
+} from "@/lib/validation";
 
 const steps = [
   {
@@ -52,44 +59,44 @@ const steps = [
 
 export default function PartExchangePage() {
   const dispatch = useAppDispatch();
-  const [form, setForm] = useState(emptyValuation);
-  const [sending, setSending] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<PartExchangeValues>({
+    resolver: yupResolver(partExchangeSchema),
+    defaultValues: partExchangeDefaults,
+    mode: "onTouched",
+  });
 
   // Sent as a "part-exchange" enquiry → appears in Admin › Enquiries.
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.registration.trim() || !form.name.trim() || !form.phone.trim()) {
-      setError("Please enter your registration, name and phone number.");
-      return;
-    }
-    const [firstName, ...rest] = form.name.trim().split(/\s+/);
-    const mileage = parseInt(form.mileage.replace(/[^\d]/g, ""), 10);
-    setSending(true);
-    setError(null);
+  const onSubmit = handleSubmit(async (values) => {
+    const [firstName, ...rest] = values.name.trim().split(/\s+/);
+    const registration = values.registration.replace(/\s+/g, "").toUpperCase();
     try {
       await dispatch(
         addEnquiry({
           type: "part-exchange",
           firstName,
           lastName: rest.join(" "),
-          phone: form.phone,
+          phone: values.phone,
           marketingConsent: false,
-          message: `Part-exchange valuation request for ${form.registration.toUpperCase()}.`,
-          pxRegistration: form.registration,
-          pxMileage: Number.isNaN(mileage) ? undefined : mileage,
-          pxCondition: form.condition || undefined,
+          message: `Part-exchange valuation request for ${registration}.`,
+          pxRegistration: registration,
+          pxMileage: toInt(values.mileage),
+          pxCondition: values.condition || undefined,
         }),
       ).unwrap();
       setSubmitted(true);
-      setForm(emptyValuation);
+      reset(partExchangeDefaults);
     } catch (message) {
-      setError(String(message));
-    } finally {
-      setSending(false);
+      setError("root.server", { message: String(message) });
     }
-  };
+  });
 
   return (
     <>
@@ -202,96 +209,109 @@ export default function PartExchangePage() {
                 </Button>
               </div>
             ) : (
-            <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+            <form className="space-y-5" onSubmit={onSubmit} noValidate>
               <div>
-                <Label className="text-xs text-zinc-400 mb-1.5 block">
-                  Registration Number
+                <Label htmlFor="px-registration" className="text-xs text-zinc-400 mb-1.5 block">
+                  Registration Number *
                 </Label>
                 <Input
-                  value={form.registration}
-                  onChange={(e) => setForm((p) => ({ ...p, registration: e.target.value }))}
+                  id="px-registration"
                   maxLength={10}
+                  autoCapitalize="characters"
                   placeholder="e.g. AB12 CDE"
+                  {...register("registration")}
+                  {...fieldAria("px-registration", errors.registration?.message)}
                   className="rounded-xl bg-white/5 border-white/10 text-white text-center text-lg font-bold uppercase placeholder:text-zinc-600 h-14"
                 />
+                <FieldError id="px-registration-error" message={errors.registration?.message} />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-xs text-zinc-400 mb-1.5 block">
+                  <Label htmlFor="px-mileage" className="text-xs text-zinc-400 mb-1.5 block">
                     Current Mileage
                   </Label>
                   <Input
-                    type="number"
-                    min={0}
-                    value={form.mileage}
-                    onChange={(e) => setForm((p) => ({ ...p, mileage: e.target.value }))}
+                    id="px-mileage"
+                    inputMode="numeric"
                     placeholder="e.g. 45,000"
+                    {...register("mileage")}
+                    {...fieldAria("px-mileage", errors.mileage?.message)}
                     className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                   />
+                  <FieldError id="px-mileage-error" message={errors.mileage?.message} />
                 </div>
                 <div>
-                  <Label className="text-xs text-zinc-400 mb-1.5 block">
+                  <Label htmlFor="px-condition" className="text-xs text-zinc-400 mb-1.5 block">
                     Condition
                   </Label>
-                  <Select
-                    value={form.condition}
-                    onValueChange={(val) => setForm((p) => ({ ...p, condition: val ?? "" }))}
-                  >
-                    <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white">
-                      <SelectValue placeholder="Select condition" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-surface border-white/10">
-                      <SelectItem value="excellent">Excellent</SelectItem>
-                      <SelectItem value="good">Good</SelectItem>
-                      <SelectItem value="fair">Fair</SelectItem>
-                      <SelectItem value="poor">Poor</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Controller
+                    control={control}
+                    name="condition"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={(val) => field.onChange(val ?? "")}>
+                        <SelectTrigger
+                          id="px-condition"
+                          ref={field.ref}
+                          {...fieldAria("px-condition", errors.condition?.message)}
+                          className="rounded-xl bg-white/5 border-white/10 text-white"
+                        >
+                          <SelectValue placeholder="Select condition" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-surface border-white/10">
+                          <SelectItem value="excellent">Excellent</SelectItem>
+                          <SelectItem value="good">Good</SelectItem>
+                          <SelectItem value="fair">Fair</SelectItem>
+                          <SelectItem value="poor">Poor</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  <FieldError id="px-condition-error" message={errors.condition?.message} />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-xs text-zinc-400 mb-1.5 block">
+                  <Label htmlFor="px-name" className="text-xs text-zinc-400 mb-1.5 block">
                     Your Name *
                   </Label>
                   <Input
-                    value={form.name}
-                    onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                    id="px-name"
                     autoComplete="name"
                     placeholder="Full name"
+                    {...register("name")}
+                    {...fieldAria("px-name", errors.name?.message)}
                     className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                   />
+                  <FieldError id="px-name-error" message={errors.name?.message} />
                 </div>
                 <div>
-                  <Label className="text-xs text-zinc-400 mb-1.5 block">
+                  <Label htmlFor="px-phone" className="text-xs text-zinc-400 mb-1.5 block">
                     Phone Number *
                   </Label>
                   <Input
+                    id="px-phone"
                     type="tel"
-                    value={form.phone}
-                    onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
                     autoComplete="tel"
                     placeholder="07700 900123"
+                    {...register("phone")}
+                    {...fieldAria("px-phone", errors.phone?.message)}
                     className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                   />
+                  <FieldError id="px-phone-error" message={errors.phone?.message} />
                 </div>
               </div>
 
-              {error && (
-                <p role="alert" className="text-sm text-red-400">
-                  {error}
-                </p>
-              )}
+              <FormError message={errors.root?.server?.message} />
 
               <Button
                 type="submit"
-                disabled={sending}
+                disabled={isSubmitting}
                 className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold"
               >
                 <ArrowLeftRight className="w-4 h-4" />
-                {sending ? "Sending…" : "Get My Free Valuation"}
+                {isSubmitting ? "Sending…" : "Get My Free Valuation"}
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </form>

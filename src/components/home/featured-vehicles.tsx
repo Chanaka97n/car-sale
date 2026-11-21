@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { useEffect } from "react";
+import { defaultIntentFor, vehicleEnquiryHref } from "@/lib/enquiry-intent";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import {
   fetchFeaturedVehicles,
@@ -105,15 +106,17 @@ function VehicleCard({
                 View Details
               </Button>
             </Link>
-            <Link href="/contact">
-              <Button
-                size="sm"
-                className="rounded-full btn-gradient text-xs gap-1"
-              >
-                Enquire
-                <ArrowRight className="w-3 h-3" />
-              </Button>
-            </Link>
+            {vehicle.vehicleStatus !== "sold" && (
+              <Link href={vehicleEnquiryHref(vehicle.id, defaultIntentFor(vehicle))}>
+                <Button
+                  size="sm"
+                  className="rounded-full btn-gradient text-xs gap-1"
+                >
+                  {vehicle.enableRequestPrice ? "Request Price" : "Enquire"}
+                  <ArrowRight className="w-3 h-3" />
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </div>

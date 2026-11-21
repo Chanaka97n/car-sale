@@ -5,7 +5,6 @@ import { useAppSelector, useAppDispatch } from "@/redux/hooks";
 import {
   selectUsers,
   selectUsersStatus,
-  selectUsersMutationStatus,
   selectTemporaryCredentials,
   fetchUsers,
   addUser,
@@ -35,10 +34,8 @@ export default function AdminUsersPage() {
   const users = useAppSelector(selectUsers);
   const loadStatus = useAppSelector(selectUsersStatus);
   const loadError = useAppSelector((s) => s.users.error);
-  const saving = useAppSelector(selectUsersMutationStatus) === "loading";
   const tempCredentials = useAppSelector(selectTemporaryCredentials);
 
-  const [formError, setFormError] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,7 +46,8 @@ export default function AdminUsersPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [form, setForm] = useState<UserForm>(emptyUserForm);
+  /** What the add/edit modal starts from (validation + state live in react-hook-form). */
+  const [initialValues, setInitialValues] = useState<UserForm>(emptyUserForm);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
 
@@ -59,28 +57,17 @@ export default function AdminUsersPage() {
       u.email.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleAdd = async () => {
-    setFormError(null);
-    try {
-      await dispatch(addUser(form)).unwrap();
-      setForm(emptyUserForm);
-      setAddOpen(false);
-    } catch (message) {
-      setFormError(String(message));
-    }
+  // Rejections propagate to the modal, which shows them as a form-level error.
+  const handleAdd = async (values: UserForm) => {
+    await dispatch(addUser(values)).unwrap();
+    setAddOpen(false);
   };
 
-  const handleEdit = async () => {
+  const handleEdit = async (values: UserForm) => {
     if (!editingUser) return;
-    setFormError(null);
-    try {
-      await dispatch(updateUser({ ...editingUser, ...form })).unwrap();
-      setEditOpen(false);
-      setEditingUser(null);
-      setForm(emptyUserForm);
-    } catch (message) {
-      setFormError(String(message));
-    }
+    await dispatch(updateUser({ ...editingUser, ...values })).unwrap();
+    setEditOpen(false);
+    setEditingUser(null);
   };
 
   const handleDelete = async () => {
@@ -96,9 +83,8 @@ export default function AdminUsersPage() {
   };
 
   const openEdit = (user: User) => {
-    setFormError(null);
     setEditingUser(user);
-    setForm({ name: user.name, email: user.email, role: user.role, status: user.status });
+    setInitialValues({ name: user.name, email: user.email, role: user.role, status: user.status });
     setEditOpen(true);
   };
 
@@ -164,7 +150,7 @@ export default function AdminUsersPage() {
             />
           </div>
           <Button
-            onClick={() => { setForm(emptyUserForm); setFormError(null); setAddOpen(true); }}
+            onClick={() => { setInitialValues(emptyUserForm); setAddOpen(true); }}
             className="btn-gradient gap-2 shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -235,23 +221,17 @@ export default function AdminUsersPage() {
       <UserFormModal
         open={addOpen}
         onOpenChange={setAddOpen}
-        form={form}
-        setForm={setForm}
+        initialValues={initialValues}
         onSubmit={handleAdd}
         mode="add"
-        saving={saving}
-        error={formError}
       />
 
       <UserFormModal
         open={editOpen}
         onOpenChange={setEditOpen}
-        form={form}
-        setForm={setForm}
+        initialValues={initialValues}
         onSubmit={handleEdit}
         mode="edit"
-        saving={saving}
-        error={formError}
       />
 
       <DeleteConfirmModal

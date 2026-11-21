@@ -38,9 +38,23 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
-import { addEnquiry, selectEnquirySubmitStatus } from "@/redux/admin/enquiries/enquiriesIndex";
+import { addEnquiry } from "@/redux/admin/enquiries/enquiriesIndex";
 import { fetchAllVehicles, selectAllVehicles } from "@/redux/vehicles/vehiclesIndex";
 import { format } from "date-fns";
+import { Controller, useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { FieldError, FormError, fieldAria } from "@/components/forms/form-errors";
+import {
+  testDriveBookingDefaults,
+  testDriveBookingSchema,
+  type TestDriveBookingValues,
+} from "@/lib/validation";
+
+/** "YYYY-MM-DD" (form value) → local Date for the calendar. */
+function isoToDate(value: string): Date | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : undefined;
+}
 
 const contactMethods = [
   {
@@ -126,59 +140,54 @@ const enquiryTypes = [
 export default function ContactPage() {
   const dispatch = useAppDispatch();
   const allVehicles = useAppSelector(selectAllVehicles);
-  const submitting = useAppSelector(selectEnquirySubmitStatus) === "loading";
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Vehicle picker for the test-drive form.
   useEffect(() => {
     dispatch(fetchAllVehicles());
   }, [dispatch]);
 
-  const [date, setDate] = useState<Date | undefined>(undefined);
   const [dateOpen, setDateOpen] = useState(false);
   const [disableBefore, setDisableBefore] = useState<Date | undefined>(undefined);
-
-  const [bookingForm, setBookingForm] = useState({
-    vehicle: "",
-    time: "",
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    message: "",
-    marketing: false,
-  });
   const [bookingSubmitted, setBookingSubmitted] = useState(false);
 
-  const handleBookingSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!bookingForm.firstName || !bookingForm.email || !bookingForm.phone) return;
-    const selectedVehicle = allVehicles.find((v) => v.id === bookingForm.vehicle);
-    setSubmitError(null);
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<TestDriveBookingValues>({
+    resolver: yupResolver(testDriveBookingSchema),
+    defaultValues: testDriveBookingDefaults,
+    mode: "onTouched",
+  });
+
+  const handleBookingSubmit = handleSubmit(async (values) => {
+    const selectedVehicle = allVehicles.find((v) => v.id === values.vehicle);
     try {
       await dispatch(
         addEnquiry({
-        type: "test-drive",
-        firstName: bookingForm.firstName,
-        lastName: bookingForm.lastName,
-        email: bookingForm.email,
-        phone: bookingForm.phone,
-        message: bookingForm.message || "I'd like to book a test drive.",
-        vehicleId: bookingForm.vehicle || undefined,
-        vehicleLabel: selectedVehicle
-          ? `${selectedVehicle.make} ${selectedVehicle.model} ${selectedVehicle.variant}`
-          : undefined,
-        // Local calendar date — toISOString() would shift it to UTC and can land on the previous day.
-        preferredDate: date ? format(date, "yyyy-MM-dd") : undefined,
-        preferredTime: bookingForm.time || undefined,
-        marketingConsent: bookingForm.marketing,
-      }),
+          type: "test-drive",
+          firstName: values.firstName,
+          lastName: values.lastName,
+          email: values.email,
+          phone: values.phone,
+          message: values.message || "I'd like to book a test drive.",
+          vehicleId: values.vehicle || undefined,
+          vehicleLabel: selectedVehicle
+            ? `${selectedVehicle.make} ${selectedVehicle.model} ${selectedVehicle.variant}`
+            : undefined,
+          preferredDate: values.preferredDate || undefined,
+          preferredTime: values.time || undefined,
+          marketingConsent: values.marketing,
+        }),
       ).unwrap();
       setBookingSubmitted(true);
     } catch (message) {
-      setSubmitError(String(message));
+      setError("root.server", { message: String(message) });
     }
-  };
+  });
 
   return (
     <>
@@ -271,203 +280,241 @@ export default function ContactPage() {
                       className="mt-6 btn-gradient rounded-full px-8"
                       onClick={() => {
                         setBookingSubmitted(false);
-                        setBookingForm({ vehicle: "", time: "", firstName: "", lastName: "", email: "", phone: "", message: "", marketing: false });
-                        setDate(undefined);
+                        reset(testDriveBookingDefaults);
                       }}
                     >
                       Book Another
                     </Button>
                   </div>
                 ) : (
-                <form className="space-y-5" onSubmit={handleBookingSubmit}>
+                <form className="space-y-5" onSubmit={handleBookingSubmit} noValidate>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-vehicle" className="text-xs text-zinc-400 mb-1.5 block">
                         Vehicle (Optional)
                       </Label>
-                      <Select
-                        value={bookingForm.vehicle}
-                        onValueChange={(val) => setBookingForm((p) => ({ ...p, vehicle: val ?? "" }))}
-                      >
-                        <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white">
-                          <SelectValue placeholder="Select a Vehicle" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-surface border-white/10">
-                          {allVehicles.filter((v) => v.vehicleStatus !== "sold").map((v) => (
-                            <SelectItem key={v.id} value={v.id}>
-                              {v.make} {v.model} {v.variant}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Controller
+                        control={control}
+                        name="vehicle"
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={(val) => field.onChange(val ?? "")}>
+                            <SelectTrigger
+                              id="booking-vehicle"
+                              ref={field.ref}
+                              className="rounded-xl bg-white/5 border-white/10 text-white"
+                            >
+                              <SelectValue placeholder="Select a Vehicle" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-surface border-white/10">
+                              {allVehicles.filter((v) => v.vehicleStatus !== "sold").map((v) => (
+                                <SelectItem key={v.id} value={v.id}>
+                                  {v.make} {v.model} {v.variant}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
                     </div>
                     <div>
                       <Label className="text-xs text-zinc-400 mb-1.5 block">
                         Preferred Date
                       </Label>
-                      <Popover open={dateOpen} onOpenChange={(open) => {
-                          if (open) setDisableBefore(new Date());
-                          setDateOpen(open);
-                        }}>
-                        <PopoverTrigger
-                          className="flex h-10 w-full items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3 text-sm text-white cursor-pointer hover:bg-white/10 transition-colors"
-                        >
-                          <span className={date ? "text-white" : "text-zinc-500"}>
-                            {date
-                              ? date.toLocaleDateString("en-GB", {
-                                  day: "numeric",
-                                  month: "long",
-                                  year: "numeric",
-                                })
-                              : "Pick a date"}
-                          </span>
-                          <CalendarIcon className="w-4 h-4 text-zinc-500" />
-                        </PopoverTrigger>
-                        <PopoverContent
-                          align="start"
-                          className="w-auto p-0 bg-surface border-white/10"
-                        >
-                          <Calendar
-                            mode="single"
-                            selected={date}
-                            onSelect={(d) => {
-                              setDate(d ?? undefined);
-                              setDateOpen(false);
-                            }}
-                            disabled={disableBefore ? { before: disableBefore } : undefined}
-                            className="[--cell-size:--spacing(8)]"
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <Controller
+                        control={control}
+                        name="preferredDate"
+                        render={({ field }) => {
+                          const date = isoToDate(field.value);
+                          return (
+                            <Popover open={dateOpen} onOpenChange={(open) => {
+                                if (open) setDisableBefore(new Date());
+                                setDateOpen(open);
+                                if (!open) field.onBlur();
+                              }}>
+                              <PopoverTrigger
+                                {...fieldAria("booking-date", errors.preferredDate?.message)}
+                                className="flex h-10 w-full items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3 text-sm text-white cursor-pointer hover:bg-white/10 transition-colors aria-invalid:border-red-500/60"
+                              >
+                                <span className={date ? "text-white" : "text-zinc-500"}>
+                                  {date
+                                    ? date.toLocaleDateString("en-GB", {
+                                        day: "numeric",
+                                        month: "long",
+                                        year: "numeric",
+                                      })
+                                    : "Pick a date"}
+                                </span>
+                                <CalendarIcon className="w-4 h-4 text-zinc-500" />
+                              </PopoverTrigger>
+                              <PopoverContent
+                                align="start"
+                                className="w-auto p-0 bg-surface border-white/10"
+                              >
+                                <Calendar
+                                  mode="single"
+                                  selected={date}
+                                  onSelect={(d) => {
+                                    // Local calendar date — toISOString() would shift it to UTC.
+                                    field.onChange(d ? format(d, "yyyy-MM-dd") : "");
+                                    setDateOpen(false);
+                                  }}
+                                  disabled={disableBefore ? { before: disableBefore } : undefined}
+                                  className="[--cell-size:--spacing(8)]"
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          );
+                        }}
+                      />
+                      <FieldError id="booking-date-error" message={errors.preferredDate?.message} />
                     </div>
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-time" className="text-xs text-zinc-400 mb-1.5 block">
                         Preferred Time
                       </Label>
-                      <Select
-                        value={bookingForm.time}
-                        onValueChange={(val) => setBookingForm((p) => ({ ...p, time: val ?? "" }))}
-                      >
-                        <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white">
-                          <SelectValue placeholder="Select a Time" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-surface border-white/10">
-                          {[
-                            "9:00 AM",
-                            "10:00 AM",
-                            "11:00 AM",
-                            "12:00 PM",
-                            "1:00 PM",
-                            "2:00 PM",
-                            "3:00 PM",
-                            "4:00 PM",
-                            "5:00 PM",
-                          ].map((time) => (
-                            <SelectItem key={time} value={time}>
-                              {time}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Controller
+                        control={control}
+                        name="time"
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={(val) => field.onChange(val ?? "")}>
+                            <SelectTrigger
+                              id="booking-time"
+                              ref={field.ref}
+                              className="rounded-xl bg-white/5 border-white/10 text-white"
+                            >
+                              <SelectValue placeholder="Select a Time" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-surface border-white/10">
+                              {[
+                                "9:00 AM",
+                                "10:00 AM",
+                                "11:00 AM",
+                                "12:00 PM",
+                                "1:00 PM",
+                                "2:00 PM",
+                                "3:00 PM",
+                                "4:00 PM",
+                                "5:00 PM",
+                              ].map((time) => (
+                                <SelectItem key={time} value={time}>
+                                  {time}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-firstName" className="text-xs text-zinc-400 mb-1.5 block">
                         First Name *
                       </Label>
                       <Input
+                        id="booking-firstName"
+                        autoComplete="given-name"
                         placeholder="e.g. James"
-                        value={bookingForm.firstName}
-                        onChange={(e) => setBookingForm((p) => ({ ...p, firstName: e.target.value }))}
-                        required
+                        {...register("firstName")}
+                        {...fieldAria("booking-firstName", errors.firstName?.message)}
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
+                      <FieldError id="booking-firstName-error" message={errors.firstName?.message} />
                     </div>
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-lastName" className="text-xs text-zinc-400 mb-1.5 block">
                         Last Name *
                       </Label>
                       <Input
+                        id="booking-lastName"
+                        autoComplete="family-name"
                         placeholder="e.g. Mitchell"
-                        value={bookingForm.lastName}
-                        onChange={(e) => setBookingForm((p) => ({ ...p, lastName: e.target.value }))}
-                        required
+                        {...register("lastName")}
+                        {...fieldAria("booking-lastName", errors.lastName?.message)}
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
+                      <FieldError id="booking-lastName-error" message={errors.lastName?.message} />
                     </div>
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-email" className="text-xs text-zinc-400 mb-1.5 block">
                         Email Address *
                       </Label>
                       <Input
+                        id="booking-email"
                         type="email"
+                        autoComplete="email"
                         placeholder="e.g. james@email.com"
-                        value={bookingForm.email}
-                        onChange={(e) => setBookingForm((p) => ({ ...p, email: e.target.value }))}
-                        required
+                        {...register("email")}
+                        {...fieldAria("booking-email", errors.email?.message)}
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
+                      <FieldError id="booking-email-error" message={errors.email?.message} />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-phone" className="text-xs text-zinc-400 mb-1.5 block">
                         Phone Number *
                       </Label>
                       <Input
+                        id="booking-phone"
                         type="tel"
+                        autoComplete="tel"
                         placeholder="e.g. 07700 900123"
-                        value={bookingForm.phone}
-                        onChange={(e) => setBookingForm((p) => ({ ...p, phone: e.target.value }))}
-                        required
+                        {...register("phone")}
+                        {...fieldAria("booking-phone", errors.phone?.message)}
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
+                      <FieldError id="booking-phone-error" message={errors.phone?.message} />
                     </div>
                     <div>
-                      <Label className="text-xs text-zinc-400 mb-1.5 block">
+                      <Label htmlFor="booking-message" className="text-xs text-zinc-400 mb-1.5 block">
                         Additional Message (Optional)
                       </Label>
                       <Input
+                        id="booking-message"
                         placeholder="Any specific vehicle, features or questions?"
-                        value={bookingForm.message}
-                        onChange={(e) => setBookingForm((p) => ({ ...p, message: e.target.value }))}
+                        {...register("message")}
+                        {...fieldAria("booking-message", errors.message?.message)}
                         className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                       />
+                      <FieldError id="booking-message-error" message={errors.message?.message} />
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-2.5">
-                    <Checkbox
-                      id="marketing"
-                      checked={bookingForm.marketing}
-                      onCheckedChange={(checked) => setBookingForm((p) => ({ ...p, marketing: checked === true }))}
-                      className="mt-0.5 border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
-                    />
-                    <Label
-                      htmlFor="marketing"
-                      className="text-xs text-zinc-400 leading-relaxed cursor-pointer"
-                    >
-                      I&apos;d like to receive vehicle updates, offers and news
-                      from Apex Select Automotive. You can unsubscribe at any time.
-                    </Label>
-                  </div>
+                  <Controller
+                    control={control}
+                    name="marketing"
+                    render={({ field }) => (
+                      <div className="flex items-start gap-2.5">
+                        <Checkbox
+                          id="marketing"
+                          checked={field.value}
+                          onCheckedChange={(checked) => field.onChange(checked === true)}
+                          className="mt-0.5 border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
+                        />
+                        <Label
+                          htmlFor="marketing"
+                          className="text-xs text-zinc-400 leading-relaxed cursor-pointer"
+                        >
+                          I&apos;d like to receive vehicle updates, offers and news
+                          from Apex Select Automotive. You can unsubscribe at any time.
+                        </Label>
+                      </div>
+                    )}
+                  />
 
-                  {submitError && (
-                    <p role="alert" className="text-sm text-red-400">
-                      {submitError}
-                    </p>
-                  )}
+                  <FormError message={errors.root?.server?.message} />
 
                   <Button
                     type="submit"
-                    disabled={submitting}
+                    disabled={isSubmitting}
                     className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold"
                   >
                     <Send className="w-4 h-4" />
-                    {submitting ? "Sending…" : "Book My Test Drive"}
+                    {isSubmitting ? "Sending…" : "Book My Test Drive"}
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </form>

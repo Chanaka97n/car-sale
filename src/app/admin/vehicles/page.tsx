@@ -9,7 +9,6 @@ import {
   fetchAllVehicles,
   selectAllVehicles,
   selectAllVehiclesStatus,
-  selectVehicleMutationStatus,
 } from "@/redux/vehicles/vehiclesIndex";
 import { AdminAlert } from "@/components/admin/admin-alert";
 import type { Vehicle } from "@/redux/vehicles/vehiclesIndex";
@@ -41,9 +40,7 @@ export default function AdminVehiclesPage() {
   const allVehicles = useAppSelector(selectAllVehicles);
   const loadStatus = useAppSelector(selectAllVehiclesStatus);
   const loadError = useAppSelector((s) => s.vehicles.allError);
-  const saving = useAppSelector(selectVehicleMutationStatus) === "loading";
 
-  const [formError, setFormError] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,7 +52,8 @@ export default function AdminVehiclesPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [form, setForm] = useState<VehicleForm>(emptyVehicleForm);
+  /** What the add/edit modal starts from (validation + state live in react-hook-form). */
+  const [initialValues, setInitialValues] = useState<VehicleForm>(emptyVehicleForm);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [deletingVehicle, setDeletingVehicle] = useState<Vehicle | null>(null);
 
@@ -71,28 +69,17 @@ export default function AdminVehiclesPage() {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const handleAdd = async () => {
-    setFormError(null);
-    try {
-      await dispatch(addVehicle(formToVehicle(form))).unwrap();
-      setForm(emptyVehicleForm);
-      setAddOpen(false);
-    } catch (message) {
-      setFormError(String(message));
-    }
+  // Rejections propagate to the modal, which shows them as a form-level error.
+  const handleAdd = async (values: VehicleForm) => {
+    await dispatch(addVehicle(formToVehicle(values))).unwrap();
+    setAddOpen(false);
   };
 
-  const handleEdit = async () => {
+  const handleEdit = async (values: VehicleForm) => {
     if (!editingVehicle) return;
-    setFormError(null);
-    try {
-      await dispatch(updateVehicle({ id: editingVehicle.id, ...formToVehicle(form) })).unwrap();
-      setEditOpen(false);
-      setEditingVehicle(null);
-      setForm(emptyVehicleForm);
-    } catch (message) {
-      setFormError(String(message));
-    }
+    await dispatch(updateVehicle({ id: editingVehicle.id, ...formToVehicle(values) })).unwrap();
+    setEditOpen(false);
+    setEditingVehicle(null);
   };
 
   const handleDelete = async () => {
@@ -108,9 +95,8 @@ export default function AdminVehiclesPage() {
   };
 
   const openEdit = (vehicle: Vehicle) => {
-    setFormError(null);
     setEditingVehicle(vehicle);
-    setForm(vehicleToForm(vehicle));
+    setInitialValues(vehicleToForm(vehicle));
     setEditOpen(true);
   };
 
@@ -165,7 +151,7 @@ export default function AdminVehiclesPage() {
             />
           </div>
           <Button
-            onClick={() => { setForm(emptyVehicleForm); setFormError(null); setAddOpen(true); }}
+            onClick={() => { setInitialValues(emptyVehicleForm); setAddOpen(true); }}
             className="btn-gradient gap-2 shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -306,23 +292,17 @@ export default function AdminVehiclesPage() {
       <VehicleFormModal
         open={addOpen}
         onOpenChange={setAddOpen}
-        form={form}
-        setForm={setForm}
+        initialValues={initialValues}
         onSubmit={handleAdd}
         mode="add"
-        saving={saving}
-        error={formError}
       />
 
       <VehicleFormModal
         open={editOpen}
         onOpenChange={setEditOpen}
-        form={form}
-        setForm={setForm}
+        initialValues={initialValues}
         onSubmit={handleEdit}
         mode="edit"
-        saving={saving}
-        error={formError}
       />
 
       <DeleteConfirmModal

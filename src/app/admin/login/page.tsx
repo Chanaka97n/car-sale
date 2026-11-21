@@ -1,23 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
-import { login, selectIsAuthenticated, selectAuthStatus, selectAuthError } from "@/redux/admin/auth/authIndex";
+import { login, selectIsAuthenticated } from "@/redux/admin/auth/authIndex";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldError, FormError, fieldAria } from "@/components/forms/form-errors";
+import { loginDefaults, loginSchema, type LoginFormValues } from "@/lib/validation";
 import { Loader2 } from "lucide-react";
 
 export default function AdminLoginPage() {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
-  const status = useAppSelector(selectAuthStatus);
-  const error = useAppSelector(selectAuthError);
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
+    resolver: yupResolver(loginSchema),
+    defaultValues: loginDefaults,
+    mode: "onTouched",
+  });
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -25,10 +35,13 @@ export default function AdminLoginPage() {
     }
   }, [isAuthenticated, router]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    dispatch(login({ email, password }));
-  };
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      await dispatch(login(values)).unwrap();
+    } catch (message) {
+      setError("root.server", { message: String(message) });
+    }
+  });
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -43,18 +56,19 @@ export default function AdminLoginPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} noValidate className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email" className="text-zinc-300">Email</Label>
             <Input
               id="email"
               type="email"
+              autoComplete="username"
               placeholder="admin@apexselect.co.uk"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              {...register("email")}
+              {...fieldAria("email", errors.email?.message)}
               className="h-10 bg-surface border-white/10 text-white placeholder:text-zinc-600"
-              required
             />
+            <FieldError id="email-error" message={errors.email?.message} />
           </div>
 
           <div className="space-y-2">
@@ -62,26 +76,23 @@ export default function AdminLoginPage() {
             <Input
               id="password"
               type="password"
+              autoComplete="current-password"
               placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              {...register("password")}
+              {...fieldAria("password", errors.password?.message)}
               className="h-10 bg-surface border-white/10 text-white placeholder:text-zinc-600"
-              required
             />
+            <FieldError id="password-error" message={errors.password?.message} />
           </div>
 
-          {error && (
-            <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-              {error}
-            </p>
-          )}
+          <FormError message={errors.root?.server?.message} />
 
           <Button
             type="submit"
-            disabled={status === "loading"}
+            disabled={isSubmitting}
             className="w-full h-10 btn-gradient font-semibold"
           >
-            {status === "loading" ? (
+            {isSubmitting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               "Sign In"

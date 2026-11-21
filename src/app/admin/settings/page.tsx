@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
+import { FieldError, fieldAria } from "@/components/forms/form-errors";
+import { settingOptionSchema, type SettingOptionFormValues } from "@/lib/validation";
 import {
   selectSettings,
   selectSettingsError,
@@ -13,7 +17,6 @@ import {
 import { AdminAlert } from "@/components/admin/admin-alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Settings, Plus, X, Car, Fuel, Truck, Cog } from "lucide-react";
 
 type ListKey = "makes" | "bodyTypes" | "fuelTypes" | "transmissions";
@@ -25,6 +28,73 @@ const sections: { key: ListKey; label: string; icon: typeof Car; placeholder: st
   { key: "transmissions", label: "Transmissions", icon: Cog, placeholder: "e.g. CVT" },
 ];
 
+/**
+ * One "add option" form per list — validated by `settingOptionSchema`
+ * (required, ≤ 60 chars, not already in this list).
+ */
+function AddOptionForm({
+  list,
+  label,
+  placeholder,
+  existing,
+}: {
+  list: ListKey;
+  label: string;
+  placeholder: string;
+  existing: string[];
+}) {
+  const dispatch = useAppDispatch();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<SettingOptionFormValues, { existing: string[] }>({
+    resolver: yupResolver(settingOptionSchema),
+    defaultValues: { value: "" },
+    context: { existing },
+  });
+  const id = `add-${list}`;
+  const message = errors.value?.message ?? errors.root?.server?.message;
+
+  const onSubmit = handleSubmit(async ({ value }) => {
+    try {
+      await dispatch(addOption({ list, value })).unwrap();
+      reset({ value: "" });
+    } catch (err) {
+      // Shown under this input instead of the page-level banner.
+      dispatch(clearSettingsError());
+      setError("root.server", { message: String(err) });
+    }
+  });
+
+  return (
+    <form onSubmit={onSubmit} noValidate className="mb-4">
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          aria-label={`New ${label.toLowerCase()} option`}
+          placeholder={placeholder}
+          {...register("value")}
+          {...fieldAria(id, message)}
+          className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 flex-1"
+        />
+        <Button
+          type="submit"
+          size="default"
+          disabled={isSubmitting}
+          className="btn-gradient shrink-0 gap-1.5"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add
+        </Button>
+      </div>
+      <FieldError id={`${id}-error`} message={message} />
+    </form>
+  );
+}
+
 export default function AdminSettingsPage() {
   const dispatch = useAppDispatch();
   const settings = useAppSelector(selectSettings);
@@ -34,29 +104,8 @@ export default function AdminSettingsPage() {
     dispatch(fetchSettings({ force: true }));
   }, [dispatch]);
 
-  const [inputs, setInputs] = useState<Record<ListKey, string>>({
-    makes: "",
-    bodyTypes: "",
-    fuelTypes: "",
-    transmissions: "",
-  });
-
-  const handleAdd = (list: ListKey) => {
-    const value = inputs[list].trim();
-    if (!value) return;
-    dispatch(addOption({ list, value }));
-    setInputs((p) => ({ ...p, [list]: "" }));
-  };
-
   const handleRemove = (list: ListKey, value: string) => {
     dispatch(removeOption({ list, value }));
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent, list: ListKey) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleAdd(list);
-    }
   };
 
   return (
@@ -92,25 +141,12 @@ export default function AdminSettingsPage() {
             </div>
 
             <div className="p-4">
-              <div className="flex gap-2 mb-4">
-                <Input
-                  placeholder={section.placeholder}
-                  value={inputs[section.key]}
-                  onChange={(e) =>
-                    setInputs((p) => ({ ...p, [section.key]: e.target.value }))
-                  }
-                  onKeyDown={(e) => handleKeyDown(e, section.key)}
-                  className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 flex-1"
-                />
-                <Button
-                  onClick={() => handleAdd(section.key)}
-                  size="default"
-                  className="btn-gradient shrink-0 gap-1.5"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add
-                </Button>
-              </div>
+              <AddOptionForm
+                list={section.key}
+                label={section.label}
+                placeholder={section.placeholder}
+                existing={settings[section.key]}
+              />
 
               <div className="flex flex-wrap gap-2">
                 {settings[section.key].map((item) => (

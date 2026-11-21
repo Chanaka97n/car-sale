@@ -1,6 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import {
+  defaultIntentFor,
+  ENQUIRY_PARAM,
+  enquiryMessage,
+  parseEnquiryIntent,
+  type EnquiryIntent,
+} from "@/lib/enquiry-intent";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppDispatch } from "@/redux/hooks";
 import { addEnquiry } from "@/redux/admin/enquiries/enquiriesIndex";
@@ -58,6 +66,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import type { Vehicle } from "@/lib/data";
 import type { AppDispatch } from "@/redux/store";
+import { Controller, useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { FieldError, FormError, fieldAria } from "@/components/forms/form-errors";
+import {
+  testDriveDefaults,
+  testDriveSchema,
+  todayIso,
+  vehicleEnquiryDefaults,
+  vehicleEnquirySchema,
+  type TestDriveValues,
+  type VehicleEnquiryValues,
+} from "@/lib/validation";
 
 interface VehicleDetailProps {
   vehicle: Vehicle;
@@ -66,12 +86,57 @@ interface VehicleDetailProps {
 
 type InfoTab = "overview" | "features" | "specs" | "general" | "location";
 
+/** An enquiry request to apply; `seq` changes so repeating the same intent re-applies it. */
+interface IntentRequest {
+  type: EnquiryIntent;
+  seq: number;
+}
+
+/**
+ * Reads `?enquire=` from the URL (set by "Enquire" links on the listing / home page).
+ * Isolated in its own <Suspense> so the rest of the vehicle page stays prerendered.
+ */
+function EnquiryIntentListener({ onIntent }: { onIntent: (intent: EnquiryIntent) => void }) {
+  const raw = useSearchParams().get(ENQUIRY_PARAM);
+  useEffect(() => {
+    const intent = parseEnquiryIntent(raw);
+    if (intent) onIntent(intent);
+  }, [raw, onIntent]);
+  return null;
+}
+
+/** Keep `?enquire=` in the address bar in sync without a router navigation. */
+function setEnquiryParam(intent: EnquiryIntent | null) {
+  const url = new URL(window.location.href);
+  if (intent) url.searchParams.set(ENQUIRY_PARAM, intent);
+  else url.searchParams.delete(ENQUIRY_PARAM);
+  if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url);
+}
+
 export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
   const dispatch = useAppDispatch();
   const [selectedImage, setSelectedImage] = useState(0);
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [activeTab, setActiveTab] = useState<InfoTab>("overview");
   const [showTestDrive, setShowTestDrive] = useState(false);
+  const [intent, setIntent] = useState<IntentRequest | null>(null);
+
+  /** Apply an enquiry intent: test-drive opens the modal, others pre-fill the sidebar form. */
+  const applyIntent = useCallback((type: EnquiryIntent) => {
+    setIntent((prev) => ({ type, seq: (prev?.seq ?? 0) + 1 }));
+    if (type === "test-drive") setShowTestDrive(true);
+  }, []);
+
+  /** From an in-page button: same behaviour as arriving via an "Enquire" link. */
+  const requestEnquiry = (type: EnquiryIntent) => {
+    setEnquiryParam(type);
+    applyIntent(type);
+  };
+
+  const handleTestDriveOpenChange = (open: boolean) => {
+    setShowTestDrive(open);
+    if (!open && intent?.type === "test-drive") setEnquiryParam(null);
+  };
 
   const images = vehicle.images || [vehicle.image];
 
@@ -499,19 +564,21 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
 
                 <div className="space-y-3">
                   {vehicle.vehicleStatus !== "sold" && (
-                    <Link href="/contact" className="block">
-                      <Button className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold">
-                        <Phone className="w-4 h-4" />
-                        {vehicle.enableRequestPrice ? "Request Price" : "Enquire Now"}
-                        <ArrowRight className="w-4 h-4" />
-                      </Button>
-                    </Link>
+                    <Button
+                      type="button"
+                      onClick={() => requestEnquiry(defaultIntentFor(vehicle))}
+                      className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold"
+                    >
+                      <Phone className="w-4 h-4" />
+                      {vehicle.enableRequestPrice ? "Request Price" : "Enquire Now"}
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
                   )}
                   <div className="grid grid-cols-2 gap-3">
                     <Button
                       variant="outline"
                       className="w-full rounded-xl border-white/10 text-white hover:bg-white/5 gap-2 h-11"
-                      onClick={() => setShowTestDrive(true)}
+                      onClick={() => requestEnquiry("test-drive")}
                     >
                       <Calendar className="w-4 h-4" />
                       Test Drive
@@ -723,7 +790,7 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
               viewport={{ once: true }}
               className="lg:col-span-2"
             >
-              <EnquiryForm vehicle={vehicle} dispatch={dispatch} />
+              <EnquiryForm vehicle={vehicle} dispatch={dispatch} intent={intent} />
             </motion.div>
           </div>
         </div>
@@ -821,10 +888,14 @@ export function VehicleDetail({ vehicle, related }: VehicleDetailProps) {
 
       <TestDriveModal
         open={showTestDrive}
-        onOpenChange={setShowTestDrive}
+        onOpenChange={handleTestDriveOpenChange}
         vehicle={vehicle}
         dispatch={dispatch}
       />
+
+      <Suspense fallback={null}>
+        <EnquiryIntentListener onIntent={applyIntent} />
+      </Suspense>
     </>
   );
 }
@@ -891,36 +962,62 @@ function getEmbedUrl(url: string): string | null {
 function EnquiryForm({
   vehicle,
   dispatch,
+  intent,
 }: {
   vehicle: Vehicle;
   dispatch: AppDispatch;
+  /** Set when the visitor arrived via an "Enquire" link (or clicked Enquire on this page). */
+  intent: IntentRequest | null;
 }) {
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    message: "",
-  });
   const [submitted, setSubmitted] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    setValue,
+    setFocus,
+    getFieldState,
+    formState: { errors, isSubmitting },
+  } = useForm<VehicleEnquiryValues>({
+    resolver: yupResolver(vehicleEnquirySchema),
+    defaultValues: vehicleEnquiryDefaults,
+    mode: "onTouched",
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name || !form.email || !form.phone) return;
-    const [firstName, ...rest] = form.name.trim().split(" ");
-    setSending(true);
-    setError(null);
+  // ?enquire=vehicle|price → pre-fill the message for this ad, bring the form into
+  // view and focus the first field. Never overwrites a message the visitor typed.
+  const formIntent = intent && intent.type !== "test-drive" ? intent : null;
+  useEffect(() => {
+    if (!formIntent) return;
+    if (!getFieldState("message").isDirty) {
+      setValue("message", enquiryMessage(vehicle, formIntent.type));
+    }
+    containerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(() => {
+      try {
+        setFocus("name", { shouldSelect: false });
+      } catch {}
+    }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run per request (seq), not per vehicle object identity
+  }, [formIntent?.seq]);
+
+  const isPriceRequest = formIntent?.type === "price";
+
+  const onSubmit = handleSubmit(async (values) => {
+    const [firstName, ...rest] = values.name.trim().split(/\s+/);
     try {
       await dispatch(
         addEnquiry({
           type: "vehicle",
           firstName,
-          lastName: rest.join(" ") || "",
-          email: form.email,
-          phone: form.phone,
+          lastName: rest.join(" "),
+          email: values.email,
+          phone: values.phone,
           message:
-            form.message ||
+            values.message ||
             `I'm interested in the ${vehicle.year} ${vehicle.make} ${vehicle.model}.`,
           vehicleId: vehicle.id,
           vehicleLabel: `${vehicle.make} ${vehicle.model} ${vehicle.variant}`,
@@ -928,16 +1025,18 @@ function EnquiryForm({
         }),
       ).unwrap();
       setSubmitted(true);
-      setForm({ name: "", email: "", phone: "", message: "" });
+      reset(vehicleEnquiryDefaults);
     } catch (message) {
-      setError(String(message));
-    } finally {
-      setSending(false);
+      setError("root.server", { message: String(message) });
     }
-  };
+  });
 
   return (
-    <div className="sticky top-28 bg-surface rounded-2xl border border-white/5 p-6">
+    <div
+      ref={containerRef}
+      id="enquire"
+      className="sticky top-28 bg-surface rounded-2xl border border-white/5 p-6 scroll-mt-28"
+    >
       {submitted ? (
         <div className="text-center py-6">
           <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
@@ -957,82 +1056,81 @@ function EnquiryForm({
       ) : (
         <>
           <h3 className="font-semibold text-white mb-1">
-            Interested in this vehicle?
+            {isPriceRequest ? "Request the price" : "Interested in this vehicle?"}
           </h3>
           <p className="text-xs text-zinc-500 mb-5">
-            Fill in your details and we&apos;ll get back to you.
+            {isPriceRequest
+              ? "Leave your details and we'll send you our best price."
+              : "Fill in your details and we'll get back to you."}
           </p>
 
-          <form className="space-y-4" onSubmit={handleSubmit}>
+          <form className="space-y-4" onSubmit={onSubmit} noValidate>
             <div>
-              <Label className="text-xs text-zinc-400 mb-1 block">
+              <Label htmlFor="enq-name" className="text-xs text-zinc-400 mb-1 block">
                 Full Name *
               </Label>
               <Input
+                id="enq-name"
+                autoComplete="name"
                 placeholder="Your name"
-                value={form.name}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, name: e.target.value }))
-                }
-                required
+                {...register("name")}
+                {...fieldAria("enq-name", errors.name?.message)}
                 className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
               />
+              <FieldError id="enq-name-error" message={errors.name?.message} />
             </div>
             <div>
-              <Label className="text-xs text-zinc-400 mb-1 block">
+              <Label htmlFor="enq-email" className="text-xs text-zinc-400 mb-1 block">
                 Email *
               </Label>
               <Input
+                id="enq-email"
                 type="email"
+                autoComplete="email"
                 placeholder="Your email"
-                value={form.email}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, email: e.target.value }))
-                }
-                required
+                {...register("email")}
+                {...fieldAria("enq-email", errors.email?.message)}
                 className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
               />
+              <FieldError id="enq-email-error" message={errors.email?.message} />
             </div>
             <div>
-              <Label className="text-xs text-zinc-400 mb-1 block">
+              <Label htmlFor="enq-phone" className="text-xs text-zinc-400 mb-1 block">
                 Phone *
               </Label>
               <Input
+                id="enq-phone"
                 type="tel"
+                autoComplete="tel"
                 placeholder="Your phone"
-                value={form.phone}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, phone: e.target.value }))
-                }
-                required
+                {...register("phone")}
+                {...fieldAria("enq-phone", errors.phone?.message)}
                 className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
               />
+              <FieldError id="enq-phone-error" message={errors.phone?.message} />
             </div>
             <div>
-              <Label className="text-xs text-zinc-400 mb-1 block">
+              <Label htmlFor="enq-message" className="text-xs text-zinc-400 mb-1 block">
                 Message
               </Label>
-              <Input
+              <textarea
+                id="enq-message"
+                rows={3}
                 placeholder={`I'm interested in the ${vehicle.year} ${vehicle.make} ${vehicle.model}...`}
-                value={form.message}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, message: e.target.value }))
-                }
-                className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
+                {...register("message")}
+                {...fieldAria("enq-message", errors.message?.message)}
+                className="w-full rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-zinc-600 px-3 py-2 text-sm resize-y focus:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-red-500/60"
               />
+              <FieldError id="enq-message-error" message={errors.message?.message} />
             </div>
-            {error && (
-              <p role="alert" className="text-sm text-red-400">
-                {error}
-              </p>
-            )}
+            <FormError message={errors.root?.server?.message} />
             <Button
               type="submit"
-              disabled={sending}
+              disabled={isSubmitting}
               className="w-full btn-gradient rounded-xl h-11 gap-2 font-semibold"
             >
               <Mail className="w-4 h-4" />
-              {sending ? "Sending…" : "Send Enquiry"}
+              {isSubmitting ? "Sending…" : "Send Enquiry"}
             </Button>
           </form>
         </>
@@ -1076,65 +1174,61 @@ function TestDriveModal({
   vehicle: Vehicle;
   dispatch: AppDispatch;
 }) {
-  const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    preferredDate: "",
-    preferredTime: "",
-    message: "",
-    marketingConsent: false,
-  });
   const [submitted, setSubmitted] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    setError,
+    setValue,
+    getFieldState,
+    formState: { errors, isSubmitting },
+  } = useForm<TestDriveValues>({
+    resolver: yupResolver(testDriveSchema),
+    defaultValues: testDriveDefaults,
+    mode: "onTouched",
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.firstName || !form.email || !form.phone) return;
-    setSending(true);
-    setError(null);
+  // Opening the modal (button or ?enquire=test-drive) pre-fills a message for this ad,
+  // unless the visitor already wrote their own.
+  useEffect(() => {
+    if (open && !getFieldState("message").isDirty) {
+      setValue("message", enquiryMessage(vehicle, "test-drive"));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the modal opens
+  }, [open]);
+
+  const onSubmit = handleSubmit(async (values) => {
     try {
       await dispatch(
         addEnquiry({
           type: "test-drive",
-          firstName: form.firstName,
-          lastName: form.lastName,
-          email: form.email,
-          phone: form.phone,
+          firstName: values.firstName,
+          lastName: values.lastName,
+          email: values.email,
+          phone: values.phone,
           message:
-            form.message ||
+            values.message ||
             `I'd like to book a test drive for the ${vehicle.year} ${vehicle.make} ${vehicle.model}.`,
           vehicleId: vehicle.id,
           vehicleLabel: `${vehicle.make} ${vehicle.model} ${vehicle.variant}`,
-          preferredDate: form.preferredDate || undefined,
-          preferredTime: form.preferredTime || undefined,
-          marketingConsent: form.marketingConsent,
+          preferredDate: values.preferredDate || undefined,
+          preferredTime: values.preferredTime || undefined,
+          marketingConsent: values.marketingConsent,
         }),
       ).unwrap();
       setSubmitted(true);
     } catch (message) {
-      setError(String(message));
-    } finally {
-      setSending(false);
+      setError("root.server", { message: String(message) });
     }
-  };
+  });
 
   const handleClose = () => {
     onOpenChange(false);
     if (submitted) {
       setSubmitted(false);
-      setForm({
-        firstName: "",
-        lastName: "",
-        email: "",
-        phone: "",
-        preferredDate: "",
-        preferredTime: "",
-        message: "",
-        marketingConsent: false,
-      });
+      reset(testDriveDefaults);
     }
   };
 
@@ -1165,150 +1259,155 @@ function TestDriveModal({
             </Button>
           </div>
         ) : (
-          <form className="space-y-4" onSubmit={handleSubmit}>
+          <form className="space-y-4" onSubmit={onSubmit} noValidate>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs text-zinc-400 mb-1 block">
+                <Label htmlFor="td-firstName" className="text-xs text-zinc-400 mb-1 block">
                   First Name *
                 </Label>
                 <Input
+                  id="td-firstName"
+                  autoComplete="given-name"
                   placeholder="e.g. James"
-                  value={form.firstName}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, firstName: e.target.value }))
-                  }
-                  required
+                  {...register("firstName")}
+                  {...fieldAria("td-firstName", errors.firstName?.message)}
                   className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                 />
+                <FieldError id="td-firstName-error" message={errors.firstName?.message} />
               </div>
               <div>
-                <Label className="text-xs text-zinc-400 mb-1 block">
+                <Label htmlFor="td-lastName" className="text-xs text-zinc-400 mb-1 block">
                   Last Name
                 </Label>
                 <Input
+                  id="td-lastName"
+                  autoComplete="family-name"
                   placeholder="e.g. Mitchell"
-                  value={form.lastName}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, lastName: e.target.value }))
-                  }
+                  {...register("lastName")}
+                  {...fieldAria("td-lastName", errors.lastName?.message)}
                   className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                 />
+                <FieldError id="td-lastName-error" message={errors.lastName?.message} />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs text-zinc-400 mb-1 block">
+                <Label htmlFor="td-email" className="text-xs text-zinc-400 mb-1 block">
                   Email *
                 </Label>
                 <Input
+                  id="td-email"
                   type="email"
+                  autoComplete="email"
                   placeholder="Your email"
-                  value={form.email}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, email: e.target.value }))
-                  }
-                  required
+                  {...register("email")}
+                  {...fieldAria("td-email", errors.email?.message)}
                   className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                 />
+                <FieldError id="td-email-error" message={errors.email?.message} />
               </div>
               <div>
-                <Label className="text-xs text-zinc-400 mb-1 block">
+                <Label htmlFor="td-phone" className="text-xs text-zinc-400 mb-1 block">
                   Phone *
                 </Label>
                 <Input
+                  id="td-phone"
                   type="tel"
+                  autoComplete="tel"
                   placeholder="07700 900123"
-                  value={form.phone}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, phone: e.target.value }))
-                  }
-                  required
+                  {...register("phone")}
+                  {...fieldAria("td-phone", errors.phone?.message)}
                   className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                 />
+                <FieldError id="td-phone-error" message={errors.phone?.message} />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs text-zinc-400 mb-1 block">
+                <Label htmlFor="td-date" className="text-xs text-zinc-400 mb-1 block">
                   Preferred Date
                 </Label>
                 <Input
+                  id="td-date"
                   type="date"
-                  value={form.preferredDate}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, preferredDate: e.target.value }))
-                  }
+                  min={todayIso()}
+                  {...register("preferredDate")}
+                  {...fieldAria("td-date", errors.preferredDate?.message)}
                   className="rounded-xl bg-white/5 border-white/10 text-white"
                 />
+                <FieldError id="td-date-error" message={errors.preferredDate?.message} />
               </div>
               <div>
-                <Label className="text-xs text-zinc-400 mb-1 block">
+                <Label htmlFor="td-time" className="text-xs text-zinc-400 mb-1 block">
                   Preferred Time
                 </Label>
-                <Select
-                  value={form.preferredTime}
-                  onValueChange={(val) =>
-                    setForm((p) => ({ ...p, preferredTime: val ?? "" }))
-                  }
-                >
-                  <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white">
-                    <SelectValue placeholder="Select time" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-surface border-white/10">
-                    {TIME_SLOTS.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Controller
+                  control={control}
+                  name="preferredTime"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={(val) => field.onChange(val ?? "")}>
+                      <SelectTrigger
+                        id="td-time"
+                        ref={field.ref}
+                        className="rounded-xl bg-white/5 border-white/10 text-white"
+                      >
+                        <SelectValue placeholder="Select time" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-surface border-white/10">
+                        {TIME_SLOTS.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </div>
             </div>
 
             <div>
-              <Label className="text-xs text-zinc-400 mb-1 block">
+              <Label htmlFor="td-message" className="text-xs text-zinc-400 mb-1 block">
                 Message (Optional)
               </Label>
               <Input
+                id="td-message"
                 placeholder="Any specific requests or questions?"
-                value={form.message}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, message: e.target.value }))
-                }
+                {...register("message")}
+                {...fieldAria("td-message", errors.message?.message)}
                 className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
               />
+              <FieldError id="td-message-error" message={errors.message?.message} />
             </div>
 
-            <div className="flex items-start gap-2.5">
-              <Checkbox
-                checked={form.marketingConsent}
-                onCheckedChange={(checked) =>
-                  setForm((p) => ({
-                    ...p,
-                    marketingConsent: checked === true,
-                  }))
-                }
-                className="mt-0.5 border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
-              />
-              <Label className="text-xs text-zinc-400 leading-relaxed cursor-pointer">
-                I&apos;d like to receive vehicle updates and offers.
-              </Label>
-            </div>
+            <Controller
+              control={control}
+              name="marketingConsent"
+              render={({ field }) => (
+                <div className="flex items-start gap-2.5">
+                  <Checkbox
+                    id="td-marketing"
+                    checked={field.value}
+                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                    className="mt-0.5 border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
+                  />
+                  <Label htmlFor="td-marketing" className="text-xs text-zinc-400 leading-relaxed cursor-pointer">
+                    I&apos;d like to receive vehicle updates and offers.
+                  </Label>
+                </div>
+              )}
+            />
 
-            {error && (
-              <p role="alert" className="text-sm text-red-400">
-                {error}
-              </p>
-            )}
+            <FormError message={errors.root?.server?.message} />
             <Button
               type="submit"
-              disabled={sending}
+              disabled={isSubmitting}
               className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold"
             >
               <Calendar className="w-4 h-4" />
-              {sending ? "Sending…" : "Book My Test Drive"}
+              {isSubmitting ? "Sending…" : "Book My Test Drive"}
               <ArrowRight className="w-4 h-4" />
             </Button>
           </form>

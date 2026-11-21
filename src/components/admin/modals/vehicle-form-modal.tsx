@@ -1,6 +1,14 @@
 "use client";
 
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
+import {
+  Controller,
+  FormProvider,
+  useForm,
+  useFormContext,
+  type FieldErrors,
+} from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import { useAppSelector } from "@/redux/hooks";
 import {
   selectMakes,
@@ -27,44 +35,19 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Star, Trash2, Upload, X } from "lucide-react";
+import { FieldError, FormError, fieldAria } from "@/components/forms/form-errors";
+import { Star, Trash2, Upload } from "lucide-react";
 import type { Vehicle } from "@/redux/vehicles/vehiclesIndex";
+import {
+  toInt,
+  vehicleSchema,
+  VEHICLE_FIELD_TABS,
+  type VehicleFormValues,
+  type VehicleSchemaContext,
+} from "@/lib/validation";
 
-export type VehicleForm = {
-  make: string;
-  model: string;
-  variant: string;
-  year: string;
-  mileage: string;
-  price: string;
-  salePrice: string;
-  monthlyPrice: string;
-  fuelType: string;
-  transmission: string;
-  horsepower: string;
-  bodyType: string;
-  images: string[];
-  featured: boolean;
-  stockNumber: string;
-  vinNumber: string;
-  trim: string;
-  condition: string;
-  engineSize: string;
-  drivetrain: string;
-  fuelEconomy: string;
-  exteriorColor: string;
-  interiorColor: string;
-  taxLabel: string;
-  brochureUrl: string;
-  videoUrl: string;
-  vehicleStatus: "sold" | "unsold";
-  enableRequestPrice: boolean;
-  vehicleOverview: string;
-  featuresAndOptions: string;
-  technicalSpecs: string;
-  generalInfo: string;
-  vehicleLocation: string;
-};
+/** Form values — validated by `vehicleSchema` (src/lib/validation/vehicle.schema.ts). */
+export type VehicleForm = VehicleFormValues;
 
 export const emptyVehicleForm: VehicleForm = {
   make: "",
@@ -107,20 +90,20 @@ export function formToVehicle(form: VehicleForm): Omit<Vehicle, "id"> {
     make: form.make,
     model: form.model,
     variant: form.variant,
-    year: Number(form.year),
-    mileage: Number(form.mileage),
-    price: Number(form.price),
-    salePrice: form.salePrice ? Number(form.salePrice) : undefined,
-    monthlyPrice: Number(form.monthlyPrice),
+    year: toInt(form.year) ?? 0,
+    mileage: toInt(form.mileage) ?? 0,
+    price: toInt(form.price) ?? 0,
+    salePrice: toInt(form.salePrice),
+    monthlyPrice: toInt(form.monthlyPrice) ?? 0,
     fuelType: form.fuelType as Vehicle["fuelType"],
     transmission: form.transmission as Vehicle["transmission"],
-    horsepower: Number(form.horsepower),
+    horsepower: toInt(form.horsepower) ?? 0,
     bodyType: form.bodyType,
     image: form.images[0] ?? "",
     images: form.images,
     featured: form.featured,
     stockNumber: form.stockNumber || undefined,
-    vinNumber: form.vinNumber || undefined,
+    vinNumber: form.vinNumber ? form.vinNumber.toUpperCase() : undefined,
     trim: form.trim || undefined,
     condition: form.condition || undefined,
     engineSize: form.engineSize || undefined,
@@ -146,16 +129,16 @@ export function vehicleToForm(v: Vehicle): VehicleForm {
   return {
     make: v.make,
     model: v.model,
-    variant: v.variant,
+    variant: v.variant ?? "",
     year: String(v.year),
     mileage: String(v.mileage),
     price: String(v.price),
     salePrice: v.salePrice ? String(v.salePrice) : "",
-    monthlyPrice: String(v.monthlyPrice),
+    monthlyPrice: v.monthlyPrice ? String(v.monthlyPrice) : "",
     fuelType: v.fuelType,
     transmission: v.transmission,
-    horsepower: String(v.horsepower),
-    bodyType: v.bodyType,
+    horsepower: v.horsepower ? String(v.horsepower) : "",
+    bodyType: v.bodyType ?? "",
     images: imgs,
     featured: v.featured ?? false,
     stockNumber: v.stockNumber ?? "",
@@ -183,14 +166,11 @@ export function vehicleToForm(v: Vehicle): VehicleForm {
 interface VehicleFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  form: VehicleForm;
-  setForm: React.Dispatch<React.SetStateAction<VehicleForm>>;
-  onSubmit: () => void;
   mode: "add" | "edit";
-  /** Disables the submit button while the API request is in flight. */
-  saving?: boolean;
-  /** API error from the last submit, shown above the buttons. */
-  error?: string | null;
+  /** Values the form is reset to each time the modal opens. */
+  initialValues: VehicleForm;
+  /** Called with validated values. Throw (or reject) with a message to show it in the form. */
+  onSubmit: (values: VehicleForm) => Promise<void>;
 }
 
 const TABS = [
@@ -206,117 +186,333 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+type FieldName = keyof VehicleForm;
+
+/** Tabs that currently contain at least one invalid field. */
+function tabsWithErrors(errors: FieldErrors<VehicleForm>): Set<string> {
+  return new Set(
+    (Object.keys(errors) as FieldName[])
+      .filter((k) => k in VEHICLE_FIELD_TABS)
+      .map((k) => VEHICLE_FIELD_TABS[k]),
+  );
+}
 
 export function VehicleFormModal({
   open,
   onOpenChange,
-  form,
-  setForm,
-  onSubmit,
   mode,
-  saving = false,
-  error,
+  initialValues,
+  onSubmit,
 }: VehicleFormModalProps) {
   const [activeTab, setActiveTab] = useState<TabId>("attributes");
+
+  // Settings lists → schema context, so choices are validated like the API does.
+  const makes = useAppSelector(selectMakes);
+  const fuelTypes = useAppSelector(selectFuelTypes);
+  const transmissions = useAppSelector(selectTransmissions);
+  const bodyTypes = useAppSelector(selectBodyTypes);
+
+  const methods = useForm<VehicleForm, VehicleSchemaContext>({
+    resolver: yupResolver(vehicleSchema),
+    defaultValues: initialValues,
+    context: { makes, fuelTypes, transmissions, bodyTypes },
+    mode: "onTouched",
+  });
+  const {
+    reset,
+    handleSubmit,
+    setError,
+    setFocus,
+    formState: { errors, isSubmitting },
+  } = methods;
+
+  // Back to the first tab whenever the modal re-opens (adjusted during render,
+  // not in an effect, to avoid an extra render pass).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setActiveTab("attributes");
+  }
+
+  // Fresh form values every time the modal opens.
+  useEffect(() => {
+    if (open) reset(initialValues);
+  }, [open, initialValues, reset]);
+
+  const submit = handleSubmit(
+    async (values) => {
+      try {
+        await onSubmit(values);
+      } catch (err) {
+        setError("root.server", { message: String(err) });
+      }
+    },
+    // Invalid: jump to the first tab with an error and focus that field.
+    (formErrors) => {
+      const first = (Object.keys(formErrors) as FieldName[]).find((k) => k in VEHICLE_FIELD_TABS);
+      if (!first) return;
+      setActiveTab(VEHICLE_FIELD_TABS[first] as TabId);
+      setTimeout(() => {
+        try {
+          setFocus(first);
+        } catch {}
+      }, 0);
+    },
+  );
+
+  const errorTabs = tabsWithErrors(errors);
+  const errorCount = Object.keys(errors).filter((k) => k !== "root").length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-6xl bg-surface border-white/10 max-h-[90vh] overflow-hidden p-0">
-        <DialogHeader className="px-6 pt-6 pb-0">
-          <DialogTitle className="text-white text-lg">
-            {mode === "add" ? "Add New Vehicle" : "Edit Vehicle"}
-          </DialogTitle>
-          <DialogDescription>
-            {mode === "add"
-              ? "Add a new vehicle to the inventory."
-              : "Update vehicle details."}
-          </DialogDescription>
-        </DialogHeader>
+        <FormProvider {...methods}>
+          <form onSubmit={submit} noValidate className="flex flex-col min-h-0">
+            <DialogHeader className="px-6 pt-6 pb-0">
+              <DialogTitle className="text-white text-lg">
+                {mode === "add" ? "Add New Vehicle" : "Edit Vehicle"}
+              </DialogTitle>
+              <DialogDescription>
+                {mode === "add"
+                  ? "Add a new vehicle to the inventory."
+                  : "Update vehicle details."}
+              </DialogDescription>
+            </DialogHeader>
 
-        <div className="flex flex-1 overflow-hidden min-h-0">
-          {/* Left sidebar tabs */}
-          <nav className="w-48 shrink-0 border-r border-white/10 overflow-y-auto py-2">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                  activeTab === tab.id
-                    ? "text-orange bg-orange/10 border-r-2 border-orange font-medium"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5"
-                }`}
+            <div className="flex flex-1 overflow-hidden min-h-0">
+              {/* Left sidebar tabs */}
+              <nav className="w-48 shrink-0 border-r border-white/10 overflow-y-auto py-2">
+                {TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`w-full flex items-center justify-between text-left px-4 py-2.5 text-sm transition-colors ${
+                      activeTab === tab.id
+                        ? "text-orange bg-orange/10 border-r-2 border-orange font-medium"
+                        : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    {tab.label}
+                    {errorTabs.has(tab.id) && (
+                      <span
+                        className="w-1.5 h-1.5 rounded-full bg-red-400"
+                        aria-label="has errors"
+                      />
+                    )}
+                  </button>
+                ))}
+              </nav>
+
+              {/* Right content area */}
+              <div
+                className="flex-1 overflow-y-auto px-6 py-4"
+                style={{ maxHeight: "calc(90vh - 180px)" }}
               >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
+                <TabContent activeTab={activeTab} />
+              </div>
+            </div>
 
-          {/* Right content area */}
-          <div className="flex-1 overflow-y-auto px-6 py-4" style={{ maxHeight: "calc(90vh - 180px)" }}>
-            <TabContent activeTab={activeTab} form={form} setForm={setForm} />
-          </div>
-        </div>
-
-        <DialogFooter className="px-6 py-4 border-t border-white/10 sm:items-center">
-          {error && (
-            <p role="alert" className="mr-auto text-sm text-red-400">
-              {error}
-            </p>
-          )}
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            className="border-white/10 text-zinc-300"
-          >
-            Cancel
-          </Button>
-          <Button onClick={onSubmit} disabled={saving} className="btn-gradient">
-            {saving ? "Saving…" : mode === "add" ? "Add Vehicle" : "Save Changes"}
-          </Button>
-        </DialogFooter>
+            <DialogFooter className="px-6 py-4 border-t border-white/10 sm:items-center">
+              <div className="mr-auto">
+                {errors.root?.server ? (
+                  <FormError message={errors.root.server.message} />
+                ) : errorCount > 0 ? (
+                  <p role="alert" className="text-sm text-red-400">
+                    Please fix {errorCount} field{errorCount === 1 ? "" : "s"} marked in red.
+                  </p>
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="border-white/10 text-zinc-300"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting} className="btn-gradient">
+                {isSubmitting ? "Saving…" : mode === "add" ? "Add Vehicle" : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </FormProvider>
       </DialogContent>
     </Dialog>
   );
 }
 
-function TabContent({
-  activeTab,
-  form,
-  setForm,
-}: {
-  activeTab: TabId;
-  form: VehicleForm;
-  setForm: React.Dispatch<React.SetStateAction<VehicleForm>>;
-}) {
+function TabContent({ activeTab }: { activeTab: TabId }) {
   switch (activeTab) {
     case "attributes":
-      return <AttributesTab form={form} setForm={setForm} />;
+      return <AttributesTab />;
     case "images":
-      return <ImagesTab form={form} setForm={setForm} />;
+      return <ImagesTab />;
     case "price":
-      return <PriceTab form={form} setForm={setForm} />;
+      return <PriceTab />;
     case "tax":
-      return <TaxLabelTab form={form} setForm={setForm} />;
+      return <TaxLabelTab />;
     case "fuel":
-      return <FuelEfficiencyTab form={form} setForm={setForm} />;
+      return <FuelEfficiencyTab />;
     case "brochure":
-      return <BrochureTab form={form} setForm={setForm} />;
+      return <BrochureTab />;
     case "video":
-      return <VideoTab form={form} setForm={setForm} />;
+      return <VideoTab />;
     case "status":
-      return <StatusTab form={form} setForm={setForm} />;
+      return <StatusTab />;
     case "tabs":
-      return <VehicleTabsTab form={form} setForm={setForm} />;
+      return <VehicleTabsTab />;
   }
 }
 
-type TabProps = {
-  form: VehicleForm;
-  setForm: React.Dispatch<React.SetStateAction<VehicleForm>>;
-};
+// ── Field building blocks (read errors from the form context) ─────────────
 
-function AttributesTab({ form, setForm }: TabProps) {
+const inputClass = "h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600";
+
+function useFieldError(name: FieldName) {
+  const {
+    formState: { errors },
+  } = useFormContext<VehicleForm>();
+  return errors[name]?.message as string | undefined;
+}
+
+function Field({
+  label,
+  name,
+  children,
+  hint,
+}: {
+  label: string;
+  name: FieldName;
+  children: React.ReactNode;
+  hint?: React.ReactNode;
+}) {
+  const error = useFieldError(name);
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={`vf-${name}`} className="text-zinc-300 text-sm">
+        {label}
+      </Label>
+      {children}
+      {hint && !error && <p className="text-xs text-zinc-500 mt-1">{hint}</p>}
+      <FieldError id={`vf-${name}-error`} message={error} />
+    </div>
+  );
+}
+
+function TextField({
+  name,
+  label,
+  placeholder,
+  type = "text",
+  inputMode,
+  className = "",
+  hint,
+}: {
+  name: FieldName;
+  label: string;
+  placeholder?: string;
+  type?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  className?: string;
+  hint?: React.ReactNode;
+}) {
+  const { register } = useFormContext<VehicleForm>();
+  const error = useFieldError(name);
+  return (
+    <Field label={label} name={name} hint={hint}>
+      <Input
+        id={`vf-${name}`}
+        type={type}
+        inputMode={inputMode}
+        placeholder={placeholder}
+        {...register(name)}
+        {...fieldAria(`vf-${name}`, error)}
+        className={`${inputClass} ${className}`}
+      />
+    </Field>
+  );
+}
+
+/** Whole-number field: text input with a numeric keypad (no browser spinners/locale quirks). */
+function NumberField(props: Omit<Parameters<typeof TextField>[0], "type" | "inputMode">) {
+  return <TextField {...props} inputMode="numeric" />;
+}
+
+function SelectField({
+  name,
+  label,
+  options,
+  placeholder = "Select",
+}: {
+  name: FieldName;
+  label: string;
+  options: readonly string[];
+  placeholder?: string;
+}) {
+  const { control } = useFormContext<VehicleForm>();
+  const error = useFieldError(name);
+  return (
+    <Field label={label} name={name}>
+      <Controller
+        control={control}
+        name={name}
+        render={({ field }) => (
+          <Select
+            value={(field.value as string) ?? ""}
+            onValueChange={(val) => {
+              field.onChange(val ?? "");
+              field.onBlur();
+            }}
+          >
+            <SelectTrigger
+              id={`vf-${name}`}
+              ref={field.ref}
+              {...fieldAria(`vf-${name}`, error)}
+              className="w-full h-9 bg-white/5 border-white/10 text-white"
+            >
+              <SelectValue placeholder={placeholder} />
+            </SelectTrigger>
+            <SelectContent className="bg-surface border-white/10">
+              {options.map((o) => (
+                <SelectItem key={o} value={o}>
+                  {o}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      />
+    </Field>
+  );
+}
+
+function CheckboxField({ name, label }: { name: "featured" | "enableRequestPrice"; label: string }) {
+  const { control } = useFormContext<VehicleForm>();
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <div className="flex items-center gap-2 pt-2">
+          <Checkbox
+            id={`vf-${name}`}
+            checked={!!field.value}
+            onCheckedChange={(checked) => field.onChange(checked === true)}
+            className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
+          />
+          <Label htmlFor={`vf-${name}`} className="text-zinc-300 cursor-pointer">
+            {label}
+          </Label>
+        </div>
+      )}
+    />
+  );
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+
+function AttributesTab() {
   const makes = useAppSelector(selectMakes);
   const bodyTypes = useAppSelector(selectBodyTypes);
   const fuelTypes = useAppSelector(selectFuelTypes);
@@ -327,242 +523,113 @@ function AttributesTab({ form, setForm }: TabProps) {
       <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Core Attributes</h3>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Year">
-          <Input
-            type="number"
-            placeholder="2024"
-            value={form.year}
-            onChange={(e) => setForm((p) => ({ ...p, year: e.target.value }))}
-            className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-          />
-        </Field>
-        <Field label="Make">
-          <Select value={form.make} onValueChange={(val) => setForm((p) => ({ ...p, make: val ?? "" }))}>
-            <SelectTrigger className="w-full h-9 bg-white/5 border-white/10 text-white">
-              <SelectValue placeholder="Select make" />
-            </SelectTrigger>
-            <SelectContent className="bg-surface border-white/10">
-              {makes.map((m) => (
-                <SelectItem key={m} value={m}>{m}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+        <NumberField name="year" label="Year *" placeholder="2024" />
+        <SelectField name="make" label="Make *" options={makes} placeholder="Select make" />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Model">
-          <Input
-            placeholder="e.g. 3 Series"
-            value={form.model}
-            onChange={(e) => setForm((p) => ({ ...p, model: e.target.value }))}
-            className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-          />
-        </Field>
-        <Field label="Stock Number">
-          <Input
-            placeholder="e.g. STK-001"
-            value={form.stockNumber}
-            onChange={(e) => setForm((p) => ({ ...p, stockNumber: e.target.value }))}
-            className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-          />
-        </Field>
+        <TextField name="model" label="Model *" placeholder="e.g. 3 Series" />
+        <TextField name="stockNumber" label="Stock Number" placeholder="e.g. STK-001" />
       </div>
 
-      <Field label="VIN Number">
-        <Input
-          placeholder="Enter VIN number"
-          value={form.vinNumber}
-          onChange={(e) => setForm((p) => ({ ...p, vinNumber: e.target.value }))}
-          className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-        />
-        <p className="text-xs text-zinc-500 mt-1">
-          We recommend that you provide VIN Number. VIN Number is used as a unique entity in import process.
-        </p>
-      </Field>
+      <TextField
+        name="vinNumber"
+        label="VIN Number"
+        placeholder="Enter VIN number"
+        className="uppercase"
+        hint="We recommend that you provide VIN Number. VIN Number is used as a unique entity in import process."
+      />
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Trim">
-          <Input
-            placeholder="e.g. M Sport"
-            value={form.trim}
-            onChange={(e) => setForm((p) => ({ ...p, trim: e.target.value }))}
-            className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-          />
-        </Field>
-        <Field label="Variant">
-          <Input
-            placeholder="e.g. 330i M Sport"
-            value={form.variant}
-            onChange={(e) => setForm((p) => ({ ...p, variant: e.target.value }))}
-            className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-          />
-        </Field>
+        <TextField name="trim" label="Trim" placeholder="e.g. M Sport" />
+        <TextField name="variant" label="Variant" placeholder="e.g. 330i M Sport" />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Condition">
-          <Select value={form.condition} onValueChange={(val) => setForm((p) => ({ ...p, condition: val ?? "" }))}>
-            <SelectTrigger className="w-full h-9 bg-white/5 border-white/10 text-white">
-              <SelectValue placeholder="Select" />
-            </SelectTrigger>
-            <SelectContent className="bg-surface border-white/10">
-              <SelectItem value="New">New</SelectItem>
-              <SelectItem value="Used">Used</SelectItem>
-              <SelectItem value="Certified Pre-Owned">Certified Pre-Owned</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Transmission">
-          <Select value={form.transmission} onValueChange={(val) => val && setForm((p) => ({ ...p, transmission: val }))}>
-            <SelectTrigger className="w-full h-9 bg-white/5 border-white/10 text-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-surface border-white/10">
-              {transmissions.map((t) => (
-                <SelectItem key={t} value={t}>{t}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+        <SelectField name="condition" label="Condition" options={["New", "Used", "Certified Pre-Owned"]} />
+        <SelectField name="transmission" label="Transmission *" options={transmissions} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Engine">
-          <Input
-            placeholder="e.g. 2.0L Turbo"
-            value={form.engineSize}
-            onChange={(e) => setForm((p) => ({ ...p, engineSize: e.target.value }))}
-            className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-          />
-        </Field>
-        <Field label="Drivetrain">
-          <Select value={form.drivetrain} onValueChange={(val) => setForm((p) => ({ ...p, drivetrain: val ?? "" }))}>
-            <SelectTrigger className="w-full h-9 bg-white/5 border-white/10 text-white">
-              <SelectValue placeholder="Select" />
-            </SelectTrigger>
-            <SelectContent className="bg-surface border-white/10">
-              <SelectItem value="FWD">FWD</SelectItem>
-              <SelectItem value="RWD">RWD</SelectItem>
-              <SelectItem value="AWD">AWD</SelectItem>
-              <SelectItem value="4WD">4WD</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
+        <TextField name="engineSize" label="Engine" placeholder="e.g. 2.0L Turbo" />
+        <SelectField name="drivetrain" label="Drivetrain" options={["FWD", "RWD", "AWD", "4WD"]} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Fuel Type">
-          <Select value={form.fuelType} onValueChange={(val) => val && setForm((p) => ({ ...p, fuelType: val }))}>
-            <SelectTrigger className="w-full h-9 bg-white/5 border-white/10 text-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-surface border-white/10">
-              {fuelTypes.map((ft) => (
-                <SelectItem key={ft} value={ft}>{ft}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Body Type">
-          <Select value={form.bodyType} onValueChange={(val) => setForm((p) => ({ ...p, bodyType: val ?? "" }))}>
-            <SelectTrigger className="w-full h-9 bg-white/5 border-white/10 text-white">
-              <SelectValue placeholder="Select" />
-            </SelectTrigger>
-            <SelectContent className="bg-surface border-white/10">
-              {bodyTypes.map((bt) => (
-                <SelectItem key={bt} value={bt}>{bt}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+        <SelectField name="fuelType" label="Fuel Type *" options={fuelTypes} />
+        <SelectField name="bodyType" label="Body Type" options={bodyTypes} />
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <Field label="Mileage">
-          <Input
-            type="number"
-            placeholder="15000"
-            value={form.mileage}
-            onChange={(e) => setForm((p) => ({ ...p, mileage: e.target.value }))}
-            className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-          />
-        </Field>
-        <Field label="Exterior Color">
-          <Input
-            placeholder="e.g. Mineral White"
-            value={form.exteriorColor}
-            onChange={(e) => setForm((p) => ({ ...p, exteriorColor: e.target.value }))}
-            className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-          />
-        </Field>
-        <Field label="Interior Color">
-          <Input
-            placeholder="e.g. Black Leather"
-            value={form.interiorColor}
-            onChange={(e) => setForm((p) => ({ ...p, interiorColor: e.target.value }))}
-            className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
-          />
-        </Field>
+        <NumberField name="mileage" label="Mileage *" placeholder="15000" />
+        <TextField name="exteriorColor" label="Exterior Color" placeholder="e.g. Mineral White" />
+        <TextField name="interiorColor" label="Interior Color" placeholder="e.g. Black Leather" />
       </div>
 
-      <Field label="Horsepower">
-        <Input
-          type="number"
-          placeholder="250"
-          value={form.horsepower}
-          onChange={(e) => setForm((p) => ({ ...p, horsepower: e.target.value }))}
-          className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 max-w-[200px]"
-        />
-      </Field>
-
-      <div className="flex items-center gap-2 pt-2">
-        <Checkbox
-          checked={form.featured}
-          onCheckedChange={(checked) => setForm((p) => ({ ...p, featured: checked === true }))}
-          className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
-        />
-        <Label className="text-zinc-300 cursor-pointer">Featured vehicle</Label>
+      <div className="max-w-[200px]">
+        <NumberField name="horsepower" label="Horsepower" placeholder="250" />
       </div>
+
+      <CheckboxField name="featured" label="Featured vehicle" />
     </div>
   );
 }
 
-function ImagesTab({ form, setForm }: TabProps) {
+/** Matches the backend upload filter (uploads.controller.ts). */
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+function ImagesTab() {
+  const { watch, getValues, setValue, setError, clearErrors } = useFormContext<VehicleForm>();
+  const images = watch("images");
+  const error = useFieldError("images");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const setImages = useCallback(
+    (next: string[]) => setValue("images", next, { shouldDirty: true, shouldValidate: true }),
+    [setValue],
+  );
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
       if (!files) return;
+      const rejected: string[] = [];
       Array.from(files).forEach((file) => {
-        if (!file.type.startsWith("image/")) return;
+        if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+          rejected.push(`${file.name} (type not supported)`);
+          return;
+        }
+        if (file.size > MAX_IMAGE_BYTES) {
+          rejected.push(`${file.name} (over 8 MB)`);
+          return;
+        }
         const reader = new FileReader();
         reader.onload = () => {
           const dataUrl = reader.result as string;
-          setForm((p) =>
-            p.images.includes(dataUrl) ? p : { ...p, images: [...p.images, dataUrl] }
-          );
+          const current = getValues("images");
+          if (!current.includes(dataUrl)) setImages([...current, dataUrl]);
         };
         reader.readAsDataURL(file);
       });
+      if (rejected.length) {
+        setError("images", { type: "file", message: `Not added: ${rejected.join(", ")}` });
+      } else {
+        clearErrors("images");
+      }
     },
-    [setForm]
+    [getValues, setImages, setError, clearErrors],
   );
 
-  const removeImage = (url: string) => {
-    setForm((p) => ({ ...p, images: p.images.filter((i) => i !== url) }));
-  };
-
-  const setMainImage = (url: string) => {
-    setForm((p) => ({ ...p, images: [url, ...p.images.filter((i) => i !== url)] }));
-  };
+  const removeImage = (url: string) => setImages(getValues("images").filter((i) => i !== url));
+  const setMainImage = (url: string) =>
+    setImages([url, ...getValues("images").filter((i) => i !== url)]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       handleFiles(e.dataTransfer.files);
     },
-    [handleFiles]
+    [handleFiles],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -576,29 +643,32 @@ function ImagesTab({ form, setForm }: TabProps) {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept={ACCEPTED_IMAGE_TYPES.join(",")}
           multiple
           className="hidden"
-          onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
+          onChange={(e) => {
+            handleFiles(e.target.files);
+            e.target.value = "";
+          }}
         />
 
-        {form.images.length > 0 ? (
+        {images.length > 0 ? (
           <div className="space-y-4">
             <div className="group relative rounded-lg overflow-hidden border-2 border-orange/50 aspect-video bg-white/5 max-w-lg">
-              <img src={form.images[0]} alt="Main vehicle image" className="w-full h-full object-cover" />
+              <img src={images[0]} alt="Main vehicle image" className="w-full h-full object-cover" />
               <span className="absolute top-2 left-2 bg-orange text-white text-[10px] font-semibold px-2 py-0.5 rounded">
                 Main
               </span>
               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeImage(form.images[0])} className="text-red-400 hover:bg-red-500/20">
+                <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeImage(images[0])} className="text-red-400 hover:bg-red-500/20">
                   <Trash2 className="w-4 h-4" />
                 </Button>
               </div>
             </div>
 
-            {form.images.length > 1 && (
+            {images.length > 1 && (
               <div className="grid grid-cols-5 gap-2">
-                {form.images.slice(1).map((url, idx) => (
+                {images.slice(1).map((url, idx) => (
                   <div key={idx} className="group relative rounded-md overflow-hidden border border-white/10 aspect-video bg-white/5">
                     <img src={url} alt="Vehicle" className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
@@ -635,160 +705,115 @@ function ImagesTab({ form, setForm }: TabProps) {
               <Upload className="w-6 h-6 text-zinc-500" />
             </div>
             <p className="text-sm text-zinc-400 font-medium">Click to browse or drag & drop</p>
-            <p className="text-xs text-zinc-600 mt-1">PNG, JPG, WEBP up to 10MB each</p>
+            <p className="text-xs text-zinc-600 mt-1">JPG, PNG, WEBP or AVIF up to 8MB each</p>
           </div>
         )}
+        <FieldError message={error} />
       </div>
     </div>
   );
 }
 
-function PriceTab({ form, setForm }: TabProps) {
+function PriceTab() {
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 max-w-sm">
       <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Vehicle Price</h3>
-
-      <Field label="Regular Price (£)">
-        <Input
-          type="number"
-          placeholder="35000"
-          value={form.price}
-          onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
-          className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 max-w-sm"
-        />
-      </Field>
-
-      <Field label="Sale Price (£)">
-        <Input
-          type="number"
-          placeholder="30000"
-          value={form.salePrice}
-          onChange={(e) => setForm((p) => ({ ...p, salePrice: e.target.value }))}
-          className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 max-w-sm"
-        />
-      </Field>
-
-      <Field label="Monthly Price (£)">
-        <Input
-          type="number"
-          placeholder="600"
-          value={form.monthlyPrice}
-          onChange={(e) => setForm((p) => ({ ...p, monthlyPrice: e.target.value }))}
-          className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 max-w-sm"
-        />
-      </Field>
-
-      <div className="flex items-center gap-2 pt-2">
-        <Checkbox
-          checked={form.enableRequestPrice}
-          onCheckedChange={(checked) => setForm((p) => ({ ...p, enableRequestPrice: checked === true }))}
-          className="border-white/20 data-[state=checked]:bg-orange data-[state=checked]:border-orange"
-        />
-        <Label className="text-zinc-300 cursor-pointer">Enable request price form for this vehicle</Label>
-      </div>
+      <NumberField name="price" label="Regular Price (£) *" placeholder="35000" />
+      <NumberField name="salePrice" label="Sale Price (£)" placeholder="30000" />
+      <NumberField name="monthlyPrice" label="Monthly Price (£)" placeholder="600" />
+      <CheckboxField name="enableRequestPrice" label="Enable request price form for this vehicle" />
     </div>
   );
 }
 
-function TaxLabelTab({ form, setForm }: TabProps) {
+function TaxLabelTab() {
   return (
     <div className="space-y-5">
       <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Tax Label</h3>
-      <Field label="Tax Label Text">
-        <Input
-          placeholder="e.g. Tax included, VAT qualifying"
-          value={form.taxLabel}
-          onChange={(e) => setForm((p) => ({ ...p, taxLabel: e.target.value }))}
-          className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 max-w-md"
-        />
-      </Field>
-      <p className="text-xs text-zinc-500">This label will be displayed on the vehicle listing alongside the price.</p>
+      <TextField
+        name="taxLabel"
+        label="Tax Label Text"
+        placeholder="e.g. Tax included, VAT qualifying"
+        className="max-w-md"
+        hint="This label will be displayed on the vehicle listing alongside the price."
+      />
     </div>
   );
 }
 
-function FuelEfficiencyTab({ form, setForm }: TabProps) {
+function FuelEfficiencyTab() {
   return (
     <div className="space-y-5">
       <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Fuel Efficiency</h3>
-      <Field label="Fuel Economy">
-        <Input
-          placeholder="e.g. 45 mpg combined"
-          value={form.fuelEconomy}
-          onChange={(e) => setForm((p) => ({ ...p, fuelEconomy: e.target.value }))}
-          className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 max-w-md"
-        />
-      </Field>
-      <p className="text-xs text-zinc-500">Enter the fuel economy / efficiency rating for this vehicle.</p>
+      <TextField
+        name="fuelEconomy"
+        label="Fuel Economy"
+        placeholder="e.g. 45 mpg combined"
+        className="max-w-md"
+        hint="Enter the fuel economy / efficiency rating for this vehicle."
+      />
     </div>
   );
 }
 
-function BrochureTab({ form, setForm }: TabProps) {
+function BrochureTab() {
   return (
     <div className="space-y-5">
       <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Brochure Upload</h3>
-      <Field label="Brochure URL">
-        <Input
-          placeholder="https://example.com/brochure.pdf"
-          value={form.brochureUrl}
-          onChange={(e) => setForm((p) => ({ ...p, brochureUrl: e.target.value }))}
-          className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 max-w-lg"
-        />
-      </Field>
-      <p className="text-xs text-zinc-500">Provide a URL to the vehicle brochure PDF or document.</p>
+      <TextField
+        name="brochureUrl"
+        label="Brochure URL"
+        type="url"
+        placeholder="https://example.com/brochure.pdf"
+        className="max-w-lg"
+        hint="Provide a URL to the vehicle brochure PDF or document."
+      />
     </div>
   );
 }
 
-function VideoTab({ form, setForm }: TabProps) {
+function VideoTab() {
   return (
     <div className="space-y-5">
       <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Video</h3>
-      <Field label="Video URL">
-        <Input
-          placeholder="https://youtube.com/watch?v=..."
-          value={form.videoUrl}
-          onChange={(e) => setForm((p) => ({ ...p, videoUrl: e.target.value }))}
-          className="h-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 max-w-lg"
-        />
-      </Field>
-      <p className="text-xs text-zinc-500">Paste a YouTube or Vimeo URL for this vehicle&apos;s video walkthrough.</p>
+      <TextField
+        name="videoUrl"
+        label="Video URL"
+        type="url"
+        placeholder="https://youtube.com/watch?v=..."
+        className="max-w-lg"
+        hint={<>Paste a YouTube or Vimeo URL for this vehicle&apos;s video walkthrough.</>}
+      />
     </div>
   );
 }
 
-function StatusTab({ form, setForm }: TabProps) {
+function StatusTab() {
+  const { register } = useFormContext<VehicleForm>();
+  const error = useFieldError("vehicleStatus");
   return (
     <div className="space-y-5">
       <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Vehicle Status</h3>
-      <div className="flex items-center gap-6">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="radio"
-            name="vehicleStatus"
-            checked={form.vehicleStatus === "sold"}
-            onChange={() => setForm((p) => ({ ...p, vehicleStatus: "sold" }))}
-            className="accent-orange w-4 h-4"
-          />
-          <span className="text-zinc-300 text-sm">Sold</span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="radio"
-            name="vehicleStatus"
-            checked={form.vehicleStatus === "unsold"}
-            onChange={() => setForm((p) => ({ ...p, vehicleStatus: "unsold" }))}
-            className="accent-orange w-4 h-4"
-          />
-          <span className="text-zinc-300 text-sm">Unsold</span>
-        </label>
+      <div className="flex items-center gap-6" role="radiogroup" aria-label="Vehicle status">
+        {(["sold", "unsold"] as const).map((value) => (
+          <label key={value} className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              value={value}
+              {...register("vehicleStatus")}
+              className="accent-orange w-4 h-4"
+            />
+            <span className="text-zinc-300 text-sm capitalize">{value}</span>
+          </label>
+        ))}
       </div>
+      <FieldError message={error} />
     </div>
   );
 }
 
-function VehicleTabsTab({ form, setForm }: TabProps) {
+function VehicleTabsTab() {
+  const { register, formState } = useFormContext<VehicleForm>();
   const [innerTab, setInnerTab] = useState<"overview" | "features" | "specs" | "general" | "location">("overview");
 
   const innerTabs = [
@@ -808,47 +833,49 @@ function VehicleTabsTab({ form, setForm }: TabProps) {
   };
 
   const current = fieldMap[innerTab];
+  const error = formState.errors[current.key]?.message;
 
   return (
     <div className="space-y-4">
       <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Vehicle Tabs</h3>
 
       <div className="flex gap-1 border-b border-white/10 pb-0">
-        {innerTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setInnerTab(tab.id)}
-            className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
-              innerTab === tab.id
-                ? "text-orange border-orange"
-                : "text-zinc-500 border-transparent hover:text-zinc-300"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {innerTabs.map((tab) => {
+          const hasError = !!formState.errors[fieldMap[tab.id].key];
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setInnerTab(tab.id)}
+              className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
+                innerTab === tab.id
+                  ? "text-orange border-orange"
+                  : hasError
+                    ? "text-red-400 border-transparent"
+                    : "text-zinc-500 border-transparent hover:text-zinc-300"
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       <div>
-        <Label className="text-zinc-300 text-sm mb-2 block">{innerTabs.find((t) => t.id === innerTab)?.label}</Label>
+        <Label htmlFor={`vf-${current.key}`} className="text-zinc-300 text-sm mb-2 block">
+          {innerTabs.find((t) => t.id === innerTab)?.label}
+        </Label>
         <textarea
-          value={form[current.key]}
-          onChange={(e) => setForm((p) => ({ ...p, [current.key]: e.target.value }))}
+          key={current.key}
+          id={`vf-${current.key}`}
+          {...register(current.key)}
+          {...fieldAria(`vf-${current.key}`, error)}
           placeholder={current.placeholder}
           rows={10}
-          className="w-full rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-zinc-600 p-3 text-sm focus:outline-none focus:ring-1 focus:ring-orange/50 resize-y"
+          className="w-full rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-zinc-600 p-3 text-sm focus:outline-none focus:ring-1 focus:ring-orange/50 resize-y aria-invalid:border-red-500/60"
         />
+        <FieldError id={`vf-${current.key}-error`} message={error} />
       </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-zinc-300 text-sm">{label}</Label>
-      {children}
     </div>
   );
 }

@@ -15,6 +15,8 @@ import {
   selectBodyTypes,
   selectFuelTypes,
   selectTransmissions,
+  selectConditions,
+  selectDrivetrains,
 } from "@/redux/admin/settings/settingsIndex";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -211,11 +213,13 @@ export function VehicleFormModal({
   const fuelTypes = useAppSelector(selectFuelTypes);
   const transmissions = useAppSelector(selectTransmissions);
   const bodyTypes = useAppSelector(selectBodyTypes);
+  const conditions = useAppSelector(selectConditions);
+  const drivetrains = useAppSelector(selectDrivetrains);
 
   const methods = useForm<VehicleForm, VehicleSchemaContext>({
     resolver: yupResolver(vehicleSchema),
     defaultValues: initialValues,
-    context: { makes, fuelTypes, transmissions, bodyTypes },
+    context: { makes, fuelTypes, transmissions, bodyTypes, conditions, drivetrains },
     mode: "onTouched",
   });
   const {
@@ -517,6 +521,8 @@ function AttributesTab() {
   const bodyTypes = useAppSelector(selectBodyTypes);
   const fuelTypes = useAppSelector(selectFuelTypes);
   const transmissions = useAppSelector(selectTransmissions);
+  const conditions = useAppSelector(selectConditions);
+  const drivetrains = useAppSelector(selectDrivetrains);
 
   return (
     <div className="space-y-5">
@@ -546,13 +552,13 @@ function AttributesTab() {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <SelectField name="condition" label="Condition" options={["New", "Used", "Certified Pre-Owned"]} />
+        <SelectField name="condition" label="Condition" options={conditions} />
         <SelectField name="transmission" label="Transmission *" options={transmissions} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <TextField name="engineSize" label="Engine" placeholder="e.g. 2.0L Turbo" />
-        <SelectField name="drivetrain" label="Drivetrain" options={["FWD", "RWD", "AWD", "4WD"]} />
+        <SelectField name="drivetrain" label="Drivetrain" options={drivetrains} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">

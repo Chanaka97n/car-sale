@@ -26,6 +26,8 @@ export interface VehicleSchemaContext {
   fuelTypes?: string[];
   transmissions?: string[];
   bodyTypes?: string[];
+  conditions?: string[];
+  drivetrains?: string[];
 }
 
 const inList = (label: string, key: keyof VehicleSchemaContext) =>
@@ -48,14 +50,18 @@ export const vehicleSchema = yup.object({
     .default("")
     .test("vin", "VIN must be 11–17 letters or digits", (v) => !v || VIN_REGEX.test(v)),
   trim: optionalText("Trim", 80),
-  condition: optionalText("Condition", 40),
+  condition: optionalText("Condition", 40).test("in-settings", "", inList("Condition", "conditions")),
   transmission: requiredText("Transmission", 40).test(
     "in-settings",
     "",
     inList("Transmission", "transmissions"),
   ),
   engineSize: optionalText("Engine", 60),
-  drivetrain: optionalText("Drivetrain", 40),
+  drivetrain: optionalText("Drivetrain", 40).test(
+    "in-settings",
+    "",
+    inList("Drivetrain", "drivetrains"),
+  ),
   fuelType: requiredText("Fuel type", 40).test("in-settings", "", inList("Fuel type", "fuelTypes")),
   bodyType: optionalText("Body type", 40).test("in-settings", "", inList("Body type", "bodyTypes")),
   mileage: requiredInt("Mileage", { min: 0, max: 2_000_000 }),

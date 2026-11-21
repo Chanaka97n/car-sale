@@ -3,7 +3,13 @@ import type { RequestStatus } from "../../createAppAsyncThunk";
 import { MAKES, BODY_TYPES, FUEL_TYPES } from "../../vehicles/vehiclesTypes";
 import { addOption, fetchSettings, removeOption, reorderOption } from "./settingsThunks";
 
-export type SettingsListKey = "makes" | "bodyTypes" | "fuelTypes" | "transmissions";
+export type SettingsListKey =
+  | "makes"
+  | "bodyTypes"
+  | "fuelTypes"
+  | "transmissions"
+  | "conditions"
+  | "drivetrains";
 export type SettingsLists = Record<SettingsListKey, string[]>;
 
 export interface SettingsState extends SettingsLists {
@@ -20,6 +26,8 @@ const initialState: SettingsState = {
   bodyTypes: [...BODY_TYPES],
   fuelTypes: [...FUEL_TYPES],
   transmissions: ["Automatic", "Manual"],
+  conditions: ["New", "Used", "Certified Pre-Owned"],
+  drivetrains: ["FWD", "RWD", "AWD", "4WD"],
   status: "idle",
   error: null,
   mutationStatus: "idle",
@@ -47,6 +55,9 @@ const settingsSlice = createSlice({
         state.bodyTypes = payload.bodyTypes;
         state.fuelTypes = payload.fuelTypes;
         state.transmissions = payload.transmissions;
+        // Older APIs may not return the newer lists yet — keep the defaults then.
+        state.conditions = payload.conditions ?? state.conditions;
+        state.drivetrains = payload.drivetrains ?? state.drivetrains;
       })
       .addCase(fetchSettings.rejected, (state, { payload }) => {
         state.status = "failed";

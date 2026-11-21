@@ -17,15 +17,19 @@ import {
 import { AdminAlert } from "@/components/admin/admin-alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Settings, Plus, X, Car, Fuel, Truck, Cog } from "lucide-react";
+import { Settings, Plus, X, Car, Fuel, Truck, Cog, ShieldCheck, Route } from "lucide-react";
+import type { SettingsListKey } from "@/redux/admin/settings/settingsIndex";
 
-type ListKey = "makes" | "bodyTypes" | "fuelTypes" | "transmissions";
+type ListKey = SettingsListKey;
 
+/** Every dropdown in the Add/Edit Vehicle modal is managed here. */
 const sections: { key: ListKey; label: string; icon: typeof Car; placeholder: string }[] = [
   { key: "makes", label: "Vehicle Makes", icon: Car, placeholder: "e.g. Toyota" },
   { key: "fuelTypes", label: "Fuel Types", icon: Fuel, placeholder: "e.g. Hydrogen" },
   { key: "bodyTypes", label: "Body Types", icon: Truck, placeholder: "e.g. Pickup" },
   { key: "transmissions", label: "Transmissions", icon: Cog, placeholder: "e.g. CVT" },
+  { key: "conditions", label: "Conditions", icon: ShieldCheck, placeholder: "e.g. Ex-Demo" },
+  { key: "drivetrains", label: "Drivetrains", icon: Route, placeholder: "e.g. xDrive AWD" },
 ];
 
 /**

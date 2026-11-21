@@ -8,6 +8,8 @@ export {
   selectBodyTypes,
   selectFuelTypes,
   selectTransmissions,
+  selectConditions,
+  selectDrivetrains,
   selectSettingsStatus,
   selectSettingsError,
 } from "./settingsSelectors";

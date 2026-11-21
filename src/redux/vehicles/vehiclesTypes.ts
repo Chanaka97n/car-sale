@@ -61,14 +61,39 @@ export interface VehicleFilters {
   sortBy: "newest" | "price-low" | "price-high" | "mileage";
 }
 
+type RequestStatus = "idle" | "loading" | "succeeded" | "failed";
+
+/** Create/update payload — `id` comes from the URL, `image` is derived from images[0] server-side. */
+export type VehicleInput = Omit<Vehicle, "id" | "image"> & { image?: string };
+
 export interface VehiclesState {
+  /** Full inventory — admin pages, dashboard, contact-page vehicle picker. */
   allVehicles: Vehicle[];
+  allStatus: RequestStatus;
+  allError: string | null;
+
+  /** Current page of the public /vehicles listing (filtered + sorted by the API). */
   filteredVehicles: Vehicle[];
   filters: VehicleFilters;
   currentPage: number;
   pageSize: number;
   totalPages: number;
-  status: "idle" | "loading" | "succeeded" | "failed";
+  totalCount: number;
+  status: RequestStatus;
+  error: string | null;
+
+  /** Home page featured cars. */
+  featured: Vehicle[];
+  featuredStatus: RequestStatus;
+
+  /** Single vehicle + similar cars (client-side detail views). */
+  selectedVehicle: Vehicle | null;
+  similarVehicles: Vehicle[];
+  selectedStatus: RequestStatus;
+
+  /** Last admin create / update / delete / toggle. */
+  mutationStatus: RequestStatus;
+  mutationError: string | null;
 }
 
 export const initialFilters: VehicleFilters = {

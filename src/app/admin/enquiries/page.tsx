@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
+import { AdminAlert } from "@/components/admin/admin-alert";
 import {
   selectEnquiries,
+  selectEnquiriesStatus,
+  selectEnquiriesError,
+  fetchEnquiries,
+  clearEnquiriesError,
   updateEnquiryStatus,
   deleteEnquiry,
   type Enquiry,
@@ -77,6 +82,12 @@ const STATUS_VARIANTS: Record<EnquiryStatus, string> = {
 export default function AdminEnquiriesPage() {
   const dispatch = useAppDispatch();
   const enquiries = useAppSelector(selectEnquiries);
+  const loadStatus = useAppSelector(selectEnquiriesStatus);
+  const error = useAppSelector(selectEnquiriesError);
+
+  useEffect(() => {
+    dispatch(fetchEnquiries({ force: true }));
+  }, [dispatch]);
 
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
@@ -130,6 +141,10 @@ export default function AdminEnquiriesPage() {
           </p>
         </div>
       </div>
+
+      {error && (
+        <AdminAlert onDismiss={() => dispatch(clearEnquiriesError())}>{error}</AdminAlert>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
@@ -317,7 +332,7 @@ export default function AdminEnquiriesPage() {
                   colSpan={7}
                   className="text-center text-zinc-500 py-8"
                 >
-                  No enquiries found
+                  {loadStatus === "loading" ? "Loading enquiries…" : "No enquiries found"}
                 </TableCell>
               </TableRow>
             )}

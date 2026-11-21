@@ -53,11 +53,16 @@ import {
   selectPageSize,
   selectStatus,
   initialFilters,
-  MAKES,
-  BODY_TYPES,
-  FUEL_TYPES,
+  selectVehiclesError,
   type VehicleFilters,
 } from "@/redux/vehicles/vehiclesIndex";
+import {
+  fetchSettings,
+  selectMakes,
+  selectFuelTypes,
+  selectBodyTypes,
+  selectTransmissions,
+} from "@/redux/admin/settings/settingsIndex";
 
 // --- Search params helpers ---
 
@@ -137,6 +142,10 @@ function searchParamsToFilters(params: URLSearchParams): Partial<VehicleFilters>
 function FilterSidebar({ className = "" }: { className?: string }) {
   const dispatch = useAppDispatch();
   const filters = useAppSelector(selectFilters);
+  const makes = useAppSelector(selectMakes);
+  const fuelTypes = useAppSelector(selectFuelTypes);
+  const bodyTypes = useAppSelector(selectBodyTypes);
+  const transmissions = useAppSelector(selectTransmissions);
 
   return (
     <div className={className}>
@@ -171,7 +180,7 @@ function FilterSidebar({ className = "" }: { className?: string }) {
             </SelectTrigger>
             <SelectContent className="bg-surface border-white/10">
               <SelectItem value="all">Any Make</SelectItem>
-              {MAKES.map((make) => (
+              {makes.map((make) => (
                 <SelectItem key={make} value={make.toLowerCase()}>
                   {make}
                 </SelectItem>
@@ -253,7 +262,7 @@ function FilterSidebar({ className = "" }: { className?: string }) {
         <div>
           <h3 className="text-sm font-semibold text-white mb-3">Fuel Type</h3>
           <div className="space-y-2.5">
-            {FUEL_TYPES.map((fuel) => (
+            {fuelTypes.map((fuel) => (
               <div key={fuel} className="flex items-center gap-2.5">
                 <Checkbox
                   id={`fuel-${fuel}`}
@@ -278,7 +287,7 @@ function FilterSidebar({ className = "" }: { className?: string }) {
             Transmission
           </h3>
           <div className="space-y-2.5">
-            {["Automatic", "Manual"].map((trans) => (
+            {transmissions.map((trans) => (
               <div key={trans} className="flex items-center gap-2.5">
                 <Checkbox
                   id={`trans-${trans}`}
@@ -301,7 +310,7 @@ function FilterSidebar({ className = "" }: { className?: string }) {
         <div>
           <h3 className="text-sm font-semibold text-white mb-3">Body Type</h3>
           <div className="space-y-2.5">
-            {BODY_TYPES.map((type) => (
+            {bodyTypes.map((type) => (
               <div key={type} className="flex items-center gap-2.5">
                 <Checkbox
                   id={`body-${type}`}
@@ -373,11 +382,26 @@ function VehiclesContent() {
     router.replace(target, { scroll: false });
   }, [filters, currentPage, router]);
 
+  const error = useAppSelector(selectVehiclesError);
+
+  // Fetch the current page from the API whenever filters/sort/page change.
+  // Debounced so typing in the search box (and URL hydration) sends one request;
+  // a superseded in-flight request is aborted.
   useEffect(() => {
-    if (status === "idle") {
-      dispatch(fetchVehicles());
-    }
-  }, [status, dispatch]);
+    let request: { abort: () => void } | undefined;
+    const timer = setTimeout(() => {
+      request = dispatch(fetchVehicles());
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      request?.abort();
+    };
+  }, [filters, currentPage, dispatch]);
+
+  // Filter option lists (makes, fuel types, …) come from the admin Settings.
+  useEffect(() => {
+    dispatch(fetchSettings());
+  }, [dispatch]);
 
   const handlePageChange = useCallback(
     (page: number) => {
@@ -541,7 +565,21 @@ function VehiclesContent() {
               </div>
 
               {/* Vehicle Grid */}
-              {vehicles.length === 0 ? (
+              {status === "failed" && vehicles.length === 0 ? (
+                <div className="text-center py-20">
+                  <p className="text-zinc-400 text-lg mb-2">
+                    {error ?? "Could not load vehicles"}
+                  </p>
+                  <button
+                    onClick={() => dispatch(fetchVehicles())}
+                    className="text-orange hover:text-orange-light text-sm font-medium transition-colors"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : vehicles.length === 0 && status !== "succeeded" ? (
+                <div className="text-center py-20 text-zinc-500">Loading vehicles…</div>
+              ) : vehicles.length === 0 ? (
                 <div className="text-center py-20">
                   <p className="text-zinc-400 text-lg mb-2">
                     No vehicles match your filters

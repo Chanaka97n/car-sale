@@ -10,9 +10,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { makes, bodyTypes } from "@/lib/data";
+import { useEffect } from "react";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import {
+  fetchSettings,
+  selectBodyTypes,
+  selectMakes,
+} from "@/redux/admin/settings/settingsIndex";
 
 export function SearchBar() {
+  const dispatch = useAppDispatch();
+  const makes = useAppSelector(selectMakes);
+  const bodyTypes = useAppSelector(selectBodyTypes);
+
+  useEffect(() => {
+    dispatch(fetchSettings());
+  }, [dispatch]);
+
   return (
     <section className="relative z-20 -mt-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">

@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
 import {
   selectSettings,
+  selectSettingsError,
+  fetchSettings,
   addOption,
   removeOption,
+  clearSettingsError,
 } from "@/redux/admin/settings/settingsIndex";
+import { AdminAlert } from "@/components/admin/admin-alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +28,12 @@ const sections: { key: ListKey; label: string; icon: typeof Car; placeholder: st
 export default function AdminSettingsPage() {
   const dispatch = useAppDispatch();
   const settings = useAppSelector(selectSettings);
+  const error = useAppSelector(selectSettingsError);
+
+  useEffect(() => {
+    dispatch(fetchSettings({ force: true }));
+  }, [dispatch]);
+
   const [inputs, setInputs] = useState<Record<ListKey, string>>({
     makes: "",
     bodyTypes: "",
@@ -60,6 +70,10 @@ export default function AdminSettingsPage() {
           Manage dropdown options used across the vehicle forms
         </p>
       </div>
+
+      {error && (
+        <AdminAlert onDismiss={() => dispatch(clearSettingsError())}>{error}</AdminAlert>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {sections.map((section) => (

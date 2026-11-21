@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Phone,
@@ -38,7 +38,9 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
-import { addEnquiry } from "@/redux/admin/enquiries/enquiriesIndex";
+import { addEnquiry, selectEnquirySubmitStatus } from "@/redux/admin/enquiries/enquiriesIndex";
+import { fetchAllVehicles, selectAllVehicles } from "@/redux/vehicles/vehiclesIndex";
+import { format } from "date-fns";
 
 const contactMethods = [
   {
@@ -123,7 +125,14 @@ const enquiryTypes = [
 
 export default function ContactPage() {
   const dispatch = useAppDispatch();
-  const allVehicles = useAppSelector((s) => s.vehicles.allVehicles);
+  const allVehicles = useAppSelector(selectAllVehicles);
+  const submitting = useAppSelector(selectEnquirySubmitStatus) === "loading";
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Vehicle picker for the test-drive form.
+  useEffect(() => {
+    dispatch(fetchAllVehicles());
+  }, [dispatch]);
 
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [dateOpen, setDateOpen] = useState(false);
@@ -141,12 +150,14 @@ export default function ContactPage() {
   });
   const [bookingSubmitted, setBookingSubmitted] = useState(false);
 
-  const handleBookingSubmit = (e: React.FormEvent) => {
+  const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bookingForm.firstName || !bookingForm.email || !bookingForm.phone) return;
     const selectedVehicle = allVehicles.find((v) => v.id === bookingForm.vehicle);
-    dispatch(
-      addEnquiry({
+    setSubmitError(null);
+    try {
+      await dispatch(
+        addEnquiry({
         type: "test-drive",
         firstName: bookingForm.firstName,
         lastName: bookingForm.lastName,
@@ -157,12 +168,16 @@ export default function ContactPage() {
         vehicleLabel: selectedVehicle
           ? `${selectedVehicle.make} ${selectedVehicle.model} ${selectedVehicle.variant}`
           : undefined,
-        preferredDate: date ? date.toISOString().split("T")[0] : undefined,
+        // Local calendar date — toISOString() would shift it to UTC and can land on the previous day.
+        preferredDate: date ? format(date, "yyyy-MM-dd") : undefined,
         preferredTime: bookingForm.time || undefined,
         marketingConsent: bookingForm.marketing,
-      })
-    );
-    setBookingSubmitted(true);
+      }),
+      ).unwrap();
+      setBookingSubmitted(true);
+    } catch (message) {
+      setSubmitError(String(message));
+    }
   };
 
   return (
@@ -440,9 +455,19 @@ export default function ContactPage() {
                     </Label>
                   </div>
 
-                  <Button type="submit" className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold">
+                  {submitError && (
+                    <p role="alert" className="text-sm text-red-400">
+                      {submitError}
+                    </p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold"
+                  >
                     <Send className="w-4 h-4" />
-                    Book My Test Drive
+                    {submitting ? "Sending…" : "Book My Test Drive"}
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </form>

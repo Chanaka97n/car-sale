@@ -1,12 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
 import {
   addVehicle,
   updateVehicle,
   deleteVehicle,
+  fetchAllVehicles,
+  selectAllVehicles,
+  selectAllVehiclesStatus,
+  selectVehicleMutationStatus,
 } from "@/redux/vehicles/vehiclesIndex";
+import { AdminAlert } from "@/components/admin/admin-alert";
 import type { Vehicle } from "@/redux/vehicles/vehiclesIndex";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +38,17 @@ const PAGE_SIZE = 10;
 
 export default function AdminVehiclesPage() {
   const dispatch = useAppDispatch();
-  const allVehicles = useAppSelector((s) => s.vehicles.allVehicles);
+  const allVehicles = useAppSelector(selectAllVehicles);
+  const loadStatus = useAppSelector(selectAllVehiclesStatus);
+  const loadError = useAppSelector((s) => s.vehicles.allError);
+  const saving = useAppSelector(selectVehicleMutationStatus) === "loading";
+
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  useEffect(() => {
+    dispatch(fetchAllVehicles({ force: true }));
+  }, [dispatch]);
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -56,28 +71,44 @@ export default function AdminVehiclesPage() {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const handleAdd = () => {
-    dispatch(addVehicle(formToVehicle(form)));
-    setForm(emptyVehicleForm);
-    setAddOpen(false);
+  const handleAdd = async () => {
+    setFormError(null);
+    try {
+      await dispatch(addVehicle(formToVehicle(form))).unwrap();
+      setForm(emptyVehicleForm);
+      setAddOpen(false);
+    } catch (message) {
+      setFormError(String(message));
+    }
   };
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!editingVehicle) return;
-    dispatch(updateVehicle({ id: editingVehicle.id, ...formToVehicle(form) }));
-    setEditOpen(false);
-    setEditingVehicle(null);
-    setForm(emptyVehicleForm);
+    setFormError(null);
+    try {
+      await dispatch(updateVehicle({ id: editingVehicle.id, ...formToVehicle(form) })).unwrap();
+      setEditOpen(false);
+      setEditingVehicle(null);
+      setForm(emptyVehicleForm);
+    } catch (message) {
+      setFormError(String(message));
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deletingVehicle) return;
-    dispatch(deleteVehicle(deletingVehicle.id));
+    setPageError(null);
+    try {
+      await dispatch(deleteVehicle(deletingVehicle.id)).unwrap();
+    } catch (message) {
+      setPageError(String(message));
+    }
     setDeleteOpen(false);
     setDeletingVehicle(null);
   };
 
   const openEdit = (vehicle: Vehicle) => {
+    setFormError(null);
     setEditingVehicle(vehicle);
     setForm(vehicleToForm(vehicle));
     setEditOpen(true);
@@ -116,6 +147,12 @@ export default function AdminVehiclesPage() {
         ))}
       </div>
 
+      {(pageError || loadError) && (
+        <AdminAlert onDismiss={pageError ? () => setPageError(null) : undefined}>
+          {pageError ?? loadError}
+        </AdminAlert>
+      )}
+
       <div className="bg-surface rounded-xl border border-white/5 overflow-hidden">
         <div className="flex items-center justify-between gap-4 p-4 border-b border-white/5">
           <div className="relative max-w-sm flex-1">
@@ -128,7 +165,7 @@ export default function AdminVehiclesPage() {
             />
           </div>
           <Button
-            onClick={() => { setForm(emptyVehicleForm); setAddOpen(true); }}
+            onClick={() => { setForm(emptyVehicleForm); setFormError(null); setAddOpen(true); }}
             className="btn-gradient gap-2 shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -214,7 +251,7 @@ export default function AdminVehiclesPage() {
             {paginated.length === 0 && (
               <TableRow className="border-white/5">
                 <TableCell colSpan={8} className="text-center text-zinc-500 py-8">
-                  No vehicles found
+                  {loadStatus === "loading" ? "Loading vehicles…" : "No vehicles found"}
                 </TableCell>
               </TableRow>
             )}
@@ -273,6 +310,8 @@ export default function AdminVehiclesPage() {
         setForm={setForm}
         onSubmit={handleAdd}
         mode="add"
+        saving={saving}
+        error={formError}
       />
 
       <VehicleFormModal
@@ -282,6 +321,8 @@ export default function AdminVehiclesPage() {
         setForm={setForm}
         onSubmit={handleEdit}
         mode="edit"
+        saving={saving}
+        error={formError}
       />
 
       <DeleteConfirmModal

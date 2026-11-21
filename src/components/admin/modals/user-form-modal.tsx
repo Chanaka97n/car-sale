@@ -41,6 +41,10 @@ interface UserFormModalProps {
   setForm: React.Dispatch<React.SetStateAction<UserForm>>;
   onSubmit: () => void;
   mode: "add" | "edit";
+  /** Disables the submit button while the API request is in flight. */
+  saving?: boolean;
+  /** API error from the last submit, shown above the buttons. */
+  error?: string | null;
 }
 
 export function UserFormModal({
@@ -50,6 +54,8 @@ export function UserFormModal({
   setForm,
   onSubmit,
   mode,
+  saving = false,
+  error,
 }: UserFormModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -65,6 +71,16 @@ export function UserFormModal({
           </DialogDescription>
         </DialogHeader>
         <UserFormFields form={form} setForm={setForm} />
+        {mode === "add" && (
+          <p className="text-xs text-zinc-500">
+            A temporary password is generated and shown once after the user is created.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="text-sm text-red-400">
+            {error}
+          </p>
+        )}
         <DialogFooter>
           <Button
             variant="outline"
@@ -73,8 +89,8 @@ export function UserFormModal({
           >
             Cancel
           </Button>
-          <Button onClick={onSubmit} className="btn-gradient">
-            {mode === "add" ? "Add User" : "Save Changes"}
+          <Button onClick={onSubmit} disabled={saving} className="btn-gradient">
+            {saving ? "Saving…" : mode === "add" ? "Add User" : "Save Changes"}
           </Button>
         </DialogFooter>
       </DialogContent>

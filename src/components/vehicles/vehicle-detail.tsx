@@ -902,28 +902,38 @@ function EnquiryForm({
     message: "",
   });
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.email || !form.phone) return;
     const [firstName, ...rest] = form.name.trim().split(" ");
-    dispatch(
-      addEnquiry({
-        type: "vehicle",
-        firstName,
-        lastName: rest.join(" ") || "",
-        email: form.email,
-        phone: form.phone,
-        message:
-          form.message ||
-          `I'm interested in the ${vehicle.year} ${vehicle.make} ${vehicle.model}.`,
-        vehicleId: vehicle.id,
-        vehicleLabel: `${vehicle.make} ${vehicle.model} ${vehicle.variant}`,
-        marketingConsent: false,
-      })
-    );
-    setSubmitted(true);
-    setForm({ name: "", email: "", phone: "", message: "" });
+    setSending(true);
+    setError(null);
+    try {
+      await dispatch(
+        addEnquiry({
+          type: "vehicle",
+          firstName,
+          lastName: rest.join(" ") || "",
+          email: form.email,
+          phone: form.phone,
+          message:
+            form.message ||
+            `I'm interested in the ${vehicle.year} ${vehicle.make} ${vehicle.model}.`,
+          vehicleId: vehicle.id,
+          vehicleLabel: `${vehicle.make} ${vehicle.model} ${vehicle.variant}`,
+          marketingConsent: false,
+        }),
+      ).unwrap();
+      setSubmitted(true);
+      setForm({ name: "", email: "", phone: "", message: "" });
+    } catch (message) {
+      setError(String(message));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -1011,12 +1021,18 @@ function EnquiryForm({
                 className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
               />
             </div>
+            {error && (
+              <p role="alert" className="text-sm text-red-400">
+                {error}
+              </p>
+            )}
             <Button
               type="submit"
+              disabled={sending}
               className="w-full btn-gradient rounded-xl h-11 gap-2 font-semibold"
             >
               <Mail className="w-4 h-4" />
-              Send Enquiry
+              {sending ? "Sending…" : "Send Enquiry"}
             </Button>
           </form>
         </>
@@ -1071,28 +1087,38 @@ function TestDriveModal({
     marketingConsent: false,
   });
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.firstName || !form.email || !form.phone) return;
-    dispatch(
-      addEnquiry({
-        type: "test-drive",
-        firstName: form.firstName,
-        lastName: form.lastName,
-        email: form.email,
-        phone: form.phone,
-        message:
-          form.message ||
-          `I'd like to book a test drive for the ${vehicle.year} ${vehicle.make} ${vehicle.model}.`,
-        vehicleId: vehicle.id,
-        vehicleLabel: `${vehicle.make} ${vehicle.model} ${vehicle.variant}`,
-        preferredDate: form.preferredDate || undefined,
-        preferredTime: form.preferredTime || undefined,
-        marketingConsent: form.marketingConsent,
-      })
-    );
-    setSubmitted(true);
+    setSending(true);
+    setError(null);
+    try {
+      await dispatch(
+        addEnquiry({
+          type: "test-drive",
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email: form.email,
+          phone: form.phone,
+          message:
+            form.message ||
+            `I'd like to book a test drive for the ${vehicle.year} ${vehicle.make} ${vehicle.model}.`,
+          vehicleId: vehicle.id,
+          vehicleLabel: `${vehicle.make} ${vehicle.model} ${vehicle.variant}`,
+          preferredDate: form.preferredDate || undefined,
+          preferredTime: form.preferredTime || undefined,
+          marketingConsent: form.marketingConsent,
+        }),
+      ).unwrap();
+      setSubmitted(true);
+    } catch (message) {
+      setError(String(message));
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleClose = () => {
@@ -1271,12 +1297,18 @@ function TestDriveModal({
               </Label>
             </div>
 
+            {error && (
+              <p role="alert" className="text-sm text-red-400">
+                {error}
+              </p>
+            )}
             <Button
               type="submit"
+              disabled={sending}
               className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold"
             >
               <Calendar className="w-4 h-4" />
-              Book My Test Drive
+              {sending ? "Sending…" : "Book My Test Drive"}
               <ArrowRight className="w-4 h-4" />
             </Button>
           </form>

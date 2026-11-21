@@ -1,30 +1,81 @@
-import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import { mockUsers } from "./usersMockData";
+import { createSlice, isAnyOf } from "@reduxjs/toolkit";
+import { logout } from "../auth/authSlice";
+import { addUser, deleteUser, fetchUserById, fetchUsers, updateUser } from "./usersThunks";
 import type { User, UsersState } from "./usersTypes";
+
+const initialState: UsersState = {
+  users: [],
+  status: "idle",
+  error: null,
+  mutationStatus: "idle",
+  mutationError: null,
+  temporaryCredentials: null,
+};
+
+function upsert(users: User[], user: User) {
+  const idx = users.findIndex((u) => u.id === user.id);
+  if (idx === -1) users.unshift(user);
+  else users[idx] = user;
+}
 
 const usersSlice = createSlice({
   name: "users",
-  initialState: {
-    users: mockUsers,
-    status: "idle",
-  } as UsersState,
+  initialState,
   reducers: {
-    addUser(state, action: PayloadAction<Omit<User, "id" | "createdAt">>) {
-      state.users.push({
-        ...action.payload,
-        id: String(Date.now()),
-        createdAt: new Date().toISOString().split("T")[0],
-      });
+    clearTemporaryCredentials(state) {
+      state.temporaryCredentials = null;
     },
-    updateUser(state, action: PayloadAction<User>) {
-      const idx = state.users.findIndex((u) => u.id === action.payload.id);
-      if (idx !== -1) state.users[idx] = action.payload;
+    clearUsersError(state) {
+      state.error = null;
+      state.mutationError = null;
     },
-    deleteUser(state, action: PayloadAction<string>) {
-      state.users = state.users.filter((u) => u.id !== action.payload);
-    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(logout, () => initialState)
+      .addCase(fetchUsers.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+      })
+      .addCase(fetchUsers.fulfilled, (state, { payload }) => {
+        state.status = "succeeded";
+        state.users = payload;
+      })
+      .addCase(fetchUsers.rejected, (state, { payload }) => {
+        state.status = "failed";
+        state.error = payload ?? "Could not load users";
+      })
+      .addCase(fetchUserById.fulfilled, (state, { payload }) => {
+        upsert(state.users, payload);
+      })
+      .addCase(addUser.fulfilled, (state, { payload }) => {
+        state.mutationStatus = "succeeded";
+        upsert(state.users, payload.user);
+        state.temporaryCredentials = payload.temporaryPassword
+          ? { email: payload.user.email, password: payload.temporaryPassword }
+          : null;
+      })
+      .addCase(updateUser.fulfilled, (state, { payload }) => {
+        state.mutationStatus = "succeeded";
+        upsert(state.users, payload);
+      })
+      .addCase(deleteUser.fulfilled, (state, { payload }) => {
+        state.mutationStatus = "succeeded";
+        state.users = state.users.filter((u) => u.id !== payload);
+      })
+      .addMatcher(isAnyOf(addUser.pending, updateUser.pending, deleteUser.pending), (state) => {
+        state.mutationStatus = "loading";
+        state.mutationError = null;
+      })
+      .addMatcher(
+        isAnyOf(addUser.rejected, updateUser.rejected, deleteUser.rejected),
+        (state, { payload }) => {
+          state.mutationStatus = "failed";
+          state.mutationError = payload ?? "Request failed";
+        },
+      );
   },
 });
 
-export const { addUser, updateUser, deleteUser } = usersSlice.actions;
+export const { clearTemporaryCredentials, clearUsersError } = usersSlice.actions;
 export default usersSlice.reducer;

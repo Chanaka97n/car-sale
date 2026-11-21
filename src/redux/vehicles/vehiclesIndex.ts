@@ -12,11 +12,22 @@ export {
   setPage,
   setFiltersFromParams,
   resetFilters,
+  clearVehiclesError,
+} from "./vehiclesSlice";
+export {
+  fetchVehicles,
+  fetchAllVehicles,
+  fetchFeaturedVehicles,
+  fetchVehicleById,
+  fetchSimilarVehicles,
+  uploadVehicleImages,
   addVehicle,
   updateVehicle,
   deleteVehicle,
-} from "./vehiclesSlice";
-export { fetchVehicles } from "./vehiclesThunks";
+  setVehicleFeatured,
+  setVehicleStatus,
+} from "./vehiclesThunks";
+export { vehiclesApi, toVehicle, filtersToQuery, uploadPendingImages } from "./vehiclesApi";
 export {
   selectFilters,
   selectFilteredVehicles,
@@ -24,9 +35,17 @@ export {
   selectPageSize,
   selectTotalPages,
   selectStatus,
+  selectVehiclesError,
   selectTotalCount,
   selectPaginatedVehicles,
+  selectAllVehicles,
+  selectAllVehiclesStatus,
+  selectFeaturedVehicles,
+  selectFeaturedStatus,
+  selectSelectedVehicle,
+  selectSimilarVehicles,
+  selectVehicleMutationStatus,
+  selectVehicleMutationError,
 } from "./vehiclesSelectors";
-export type { Vehicle, VehicleFilters, VehiclesState } from "./vehiclesTypes";
+export type { Vehicle, VehicleInput, VehicleFilters, VehiclesState } from "./vehiclesTypes";
 export { initialFilters, MAKES, BODY_TYPES, FUEL_TYPES } from "./vehiclesTypes";
-export { mockVehicles } from "./vehiclesMockData";

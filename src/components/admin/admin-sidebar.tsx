@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
 import { selectUser, logout } from "@/redux/admin/auth/authIndex";
-import { selectNewEnquiriesCount } from "@/redux/admin/enquiries/enquiriesIndex";
+import { fetchEnquiries, selectNewEnquiriesCount } from "@/redux/admin/enquiries/enquiriesIndex";
+import type { AuthUser } from "@/redux/admin/auth/authIndex";
 import {
   LayoutDashboard,
   Users,
@@ -17,14 +18,23 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "cn";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-const navItems = [
+type Role = AuthUser["role"];
+
+/** `roles` mirrors the backend's @Roles() on each admin controller. */
+const navItems: {
+  label: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  badge?: boolean;
+  roles?: Role[];
+}[] = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Enquiries", href: "/admin/enquiries", icon: MessageSquare, badge: true },
-  { label: "Users", href: "/admin/users", icon: Users },
+  { label: "Users", href: "/admin/users", icon: Users, roles: ["admin"] },
   { label: "Vehicles", href: "/admin/vehicles", icon: Car },
-  { label: "Settings", href: "/admin/settings", icon: Settings },
+  { label: "Settings", href: "/admin/settings", icon: Settings, roles: ["admin", "manager"] },
 ];
 
 export function AdminSidebar() {
@@ -34,6 +44,13 @@ export function AdminSidebar() {
   const user = useAppSelector(selectUser);
   const newEnquiries = useAppSelector(selectNewEnquiriesCount);
   const [collapsed, setCollapsed] = useState(false);
+
+  // Loads the enquiry list once so the "new" badge is accurate on every admin page.
+  useEffect(() => {
+    dispatch(fetchEnquiries());
+  }, [dispatch]);
+
+  const visibleNav = navItems.filter((item) => !item.roles || (user && item.roles.includes(user.role)));
 
   const handleLogout = () => {
     dispatch(logout());
@@ -64,7 +81,7 @@ export function AdminSidebar() {
       </div>
 
       <nav className="flex-1 p-3 space-y-1">
-        {navItems.map((item) => {
+        {visibleNav.map((item) => {
           const isActive = pathname === item.href;
           const badgeCount = item.badge ? newEnquiries : 0;
           return (

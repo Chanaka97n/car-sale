@@ -27,7 +27,7 @@ export default function AdminLoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    dispatch(login(email, password) as never);
+    dispatch(login({ email, password }));
   };
 
   return (

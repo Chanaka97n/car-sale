@@ -187,6 +187,10 @@ interface VehicleFormModalProps {
   setForm: React.Dispatch<React.SetStateAction<VehicleForm>>;
   onSubmit: () => void;
   mode: "add" | "edit";
+  /** Disables the submit button while the API request is in flight. */
+  saving?: boolean;
+  /** API error from the last submit, shown above the buttons. */
+  error?: string | null;
 }
 
 const TABS = [
@@ -210,6 +214,8 @@ export function VehicleFormModal({
   setForm,
   onSubmit,
   mode,
+  saving = false,
+  error,
 }: VehicleFormModalProps) {
   const [activeTab, setActiveTab] = useState<TabId>("attributes");
 
@@ -252,7 +258,12 @@ export function VehicleFormModal({
           </div>
         </div>
 
-        <DialogFooter className="px-6 py-4 border-t border-white/10">
+        <DialogFooter className="px-6 py-4 border-t border-white/10 sm:items-center">
+          {error && (
+            <p role="alert" className="mr-auto text-sm text-red-400">
+              {error}
+            </p>
+          )}
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
@@ -260,8 +271,8 @@ export function VehicleFormModal({
           >
             Cancel
           </Button>
-          <Button onClick={onSubmit} className="btn-gradient">
-            {mode === "add" ? "Add Vehicle" : "Save Changes"}
+          <Button onClick={onSubmit} disabled={saving} className="btn-gradient">
+            {saving ? "Saving…" : mode === "add" ? "Add Vehicle" : "Save Changes"}
           </Button>
         </DialogFooter>
       </DialogContent>

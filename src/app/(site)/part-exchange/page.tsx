@@ -20,6 +20,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Link from "next/link";
+import { useState } from "react";
+import { useAppDispatch } from "@/redux/hooks";
+import { addEnquiry } from "@/redux/admin/enquiries/enquiriesIndex";
+
+const emptyValuation = { registration: "", mileage: "", condition: "", name: "", phone: "" };
 
 const steps = [
   {
@@ -46,6 +51,46 @@ const steps = [
 ];
 
 export default function PartExchangePage() {
+  const dispatch = useAppDispatch();
+  const [form, setForm] = useState(emptyValuation);
+  const [sending, setSending] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Sent as a "part-exchange" enquiry → appears in Admin › Enquiries.
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.registration.trim() || !form.name.trim() || !form.phone.trim()) {
+      setError("Please enter your registration, name and phone number.");
+      return;
+    }
+    const [firstName, ...rest] = form.name.trim().split(/\s+/);
+    const mileage = parseInt(form.mileage.replace(/[^\d]/g, ""), 10);
+    setSending(true);
+    setError(null);
+    try {
+      await dispatch(
+        addEnquiry({
+          type: "part-exchange",
+          firstName,
+          lastName: rest.join(" "),
+          phone: form.phone,
+          marketingConsent: false,
+          message: `Part-exchange valuation request for ${form.registration.toUpperCase()}.`,
+          pxRegistration: form.registration,
+          pxMileage: Number.isNaN(mileage) ? undefined : mileage,
+          pxCondition: form.condition || undefined,
+        }),
+      ).unwrap();
+      setSubmitted(true);
+      setForm(emptyValuation);
+    } catch (message) {
+      setError(String(message));
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <>
       {/* Hero */}
@@ -140,12 +185,32 @@ export default function PartExchangePage() {
             viewport={{ once: true }}
             className="bg-surface rounded-2xl border border-white/5 p-8"
           >
-            <form className="space-y-5">
+            {submitted ? (
+              <div className="text-center py-8" role="status">
+                <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-white mb-2">Valuation request sent</h3>
+                <p className="text-zinc-400 mb-6">
+                  Our team will call you shortly with a valuation for your vehicle.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSubmitted(false)}
+                  className="rounded-full border-white/20 text-white hover:bg-white/5"
+                >
+                  Value another car
+                </Button>
+              </div>
+            ) : (
+            <form className="space-y-5" onSubmit={handleSubmit} noValidate>
               <div>
                 <Label className="text-xs text-zinc-400 mb-1.5 block">
                   Registration Number
                 </Label>
                 <Input
+                  value={form.registration}
+                  onChange={(e) => setForm((p) => ({ ...p, registration: e.target.value }))}
+                  maxLength={10}
                   placeholder="e.g. AB12 CDE"
                   className="rounded-xl bg-white/5 border-white/10 text-white text-center text-lg font-bold uppercase placeholder:text-zinc-600 h-14"
                 />
@@ -158,6 +223,9 @@ export default function PartExchangePage() {
                   </Label>
                   <Input
                     type="number"
+                    min={0}
+                    value={form.mileage}
+                    onChange={(e) => setForm((p) => ({ ...p, mileage: e.target.value }))}
                     placeholder="e.g. 45,000"
                     className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                   />
@@ -166,7 +234,10 @@ export default function PartExchangePage() {
                   <Label className="text-xs text-zinc-400 mb-1.5 block">
                     Condition
                   </Label>
-                  <Select>
+                  <Select
+                    value={form.condition}
+                    onValueChange={(val) => setForm((p) => ({ ...p, condition: val ?? "" }))}
+                  >
                     <SelectTrigger className="rounded-xl bg-white/5 border-white/10 text-white">
                       <SelectValue placeholder="Select condition" />
                     </SelectTrigger>
@@ -186,6 +257,9 @@ export default function PartExchangePage() {
                     Your Name *
                   </Label>
                   <Input
+                    value={form.name}
+                    onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                    autoComplete="name"
                     placeholder="Full name"
                     className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                   />
@@ -196,18 +270,32 @@ export default function PartExchangePage() {
                   </Label>
                   <Input
                     type="tel"
+                    value={form.phone}
+                    onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                    autoComplete="tel"
                     placeholder="07700 900123"
                     className="rounded-xl bg-white/5 border-white/10 text-white placeholder:text-zinc-600"
                   />
                 </div>
               </div>
 
-              <Button className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold">
+              {error && (
+                <p role="alert" className="text-sm text-red-400">
+                  {error}
+                </p>
+              )}
+
+              <Button
+                type="submit"
+                disabled={sending}
+                className="w-full btn-gradient rounded-xl h-12 gap-2 font-semibold"
+              >
                 <ArrowLeftRight className="w-4 h-4" />
-                Get My Free Valuation
+                {sending ? "Sending…" : "Get My Free Valuation"}
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </form>
+            )}
           </motion.div>
         </div>
       </section>
